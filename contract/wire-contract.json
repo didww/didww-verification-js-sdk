@@ -1,0 +1,408 @@
+{
+  "capturedAt": "2026-08-31",
+  "baseUrls": {
+    "production": "https://verification.didww.com",
+    "sandbox": "https://verification-sandbox.didww.com"
+  },
+  "paths": {
+    "startVerification": {
+      "methods": [
+        "POST"
+      ],
+      "path": "/api/v1/verifications",
+      "successStatus": 201,
+      "errorStatuses": [
+        400,
+        401,
+        402,
+        422,
+        500
+      ]
+    },
+    "getVerification": {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v1/verifications/{id}",
+      "successStatus": 200,
+      "errorStatuses": [
+        401,
+        404,
+        500
+      ]
+    },
+    "reportVerification": {
+      "methods": [
+        "PUT",
+        "PATCH"
+      ],
+      "path": "/api/v1/verifications/{id}",
+      "successStatus": 200,
+      "errorStatuses": [
+        400,
+        401,
+        404,
+        422,
+        500
+      ],
+      "notes": "PUT and PATCH are the same operation, not two."
+    },
+    "getVerificationByNumber": {
+      "methods": [
+        "GET"
+      ],
+      "path": "/api/v1/verifications/by_number/{number}",
+      "successStatus": 200,
+      "errorStatuses": [
+        401,
+        404,
+        500
+      ]
+    },
+    "reportVerificationByNumber": {
+      "methods": [
+        "PUT",
+        "PATCH"
+      ],
+      "path": "/api/v1/verifications/by_number/{number}",
+      "successStatus": 200,
+      "errorStatuses": [
+        400,
+        401,
+        404,
+        422,
+        500
+      ]
+    },
+    "notes": [
+      "{id} is an opaque caller-supplied string and is percent-encoded.",
+      "{number} is reduced to ASCII digits before it is placed in the path; the server strips every non-digit anyway, and an unencoded '.' in the last path segment is read as a format suffix, which silently addresses a different number.",
+      "The signed path is the undecoded request-target path with the query excluded, so it must be byte-identical to the path in the request line."
+    ]
+  },
+  "errorEnvelope": {
+    "shape": "{ \"errors\": [ { \"code\": \"<an API_ERROR_CODES member>\", \"detail\": \"<fixed prose>\" } ] }",
+    "notes": [
+      "Every error the API itself produces uses it, 401, 402, 404 and 500 included. A request that never reaches the API — an unrouted path, a proxy in front of it — can still answer with something else, so a decoder must survive a non-JSON body on an unexpected status.",
+      "The array is never empty, and a validation failure over several fields returns one element per field. Do not assume a single item.",
+      "'detail' is fixed prose selected by 'code', never per-request text. Switch on 'code' and treat 'detail' as display-only."
+    ]
+  },
+  "verificationFields": {
+    "envelope": "{ \"data\": { ... } }",
+    "fields": {
+      "id": {
+        "type": "string",
+        "nullable": false,
+        "notes": "UUID. Read straight from a value the server cannot store empty, with no null-safe path behind it."
+      },
+      "destination": {
+        "type": "string",
+        "nullable": false,
+        "notes": "Echoed as ASCII digits only; the leading '+' of the submitted value is never returned. Read straight from a value the server cannot store empty, with no null-safe path behind it."
+      },
+      "delivery_method": {
+        "type": "string",
+        "nullable": false,
+        "enum": "DELIVERY_METHODS",
+        "notes": "Rendered by looking the stored channel up by name, over a set the server constrains on write. A channel added later arrives as a NEW STRING, not as null, which is what the open-enum handling is for."
+      },
+      "fee": {
+        "type": "string",
+        "nullable": true,
+        "notes": "Decimal string, VAT included; never a JSON number. A quote for a verified outcome, not a charge already made. Nullable because the response builder guards the computation explicitly, even though the underlying value cannot be stored empty."
+      },
+      "status": {
+        "type": "string",
+        "nullable": false,
+        "enum": "VERIFICATION_STATUSES",
+        "notes": "'expired' is synthesised on read: an unfinished verification past expires_at reads as 'expired' with error_code 'expired', so a poll can reach it with nothing having been written. Rendered by name lookup over a set the server constrains on write, so a status added later arrives as a new string."
+      },
+      "error_code": {
+        "type": "string",
+        "nullable": true,
+        "enum": "VERIFICATION_ERROR_CODES",
+        "notes": "Null while pending and once verified."
+      },
+      "error_detail": {
+        "type": "string",
+        "nullable": true,
+        "notes": "Fixed prose for error_code. Switch on the code; never parse this."
+      },
+      "expires_at": {
+        "type": "string",
+        "format": "iso8601",
+        "nullable": true,
+        "notes": "Two facts, and the SDK must follow the second. (1) The stored value cannot be empty and is assigned at creation and kept on finished verifications, so in practice it is always a timestamp. (2) The response is nonetheless built through a null-safe read, so the field CAN arrive as null. Type it nullable: a non-nullable decoder survives every response until the one that carries null, and then throws."
+      },
+      "sms": {
+        "type": "object",
+        "nullable": false,
+        "notes": "The key is present only when delivery_method is 'sms'. Its own fields are nested here, the way a request block nests them.",
+        "fields": {
+          "template": {
+            "type": "string",
+            "nullable": true,
+            "alwaysPresent": true,
+            "notes": "The message body, with the code placeholder unsubstituted."
+          },
+          "language": {
+            "type": "string",
+            "nullable": true,
+            "alwaysPresent": true,
+            "notes": "The tag the system chose: the first requested tag with a template, else the fallback. The specification requires it and does not mark it nullable, but the column behind it is nullable, so a verification stored before the server recorded one answers with null."
+          },
+          "interception_timeout": {
+            "type": "integer",
+            "nullable": false,
+            "alwaysPresent": true,
+            "notes": "Seconds to keep an on-device listener armed. A budget, not a deadline: manual entry works until expires_at."
+          },
+          "app_hash": {
+            "type": "string",
+            "nullable": false,
+            "alwaysPresent": false,
+            "notes": "The key is omitted entirely unless a hash was stored on this verification. Equality with what was sent is the only confirmation that it was accepted."
+          }
+        }
+      },
+      "callout": {
+        "type": "object",
+        "nullable": false,
+        "notes": "The key is present only when delivery_method is 'callout'.",
+        "fields": {
+          "language": {
+            "type": "string",
+            "nullable": true,
+            "alwaysPresent": true,
+            "notes": "The tag the announcement is played in: the first requested tag with a recording, else the fallback. Nullable for the same reason as sms.language."
+          }
+        }
+      }
+    }
+  },
+  "requestFields": {
+    "startVerification": {
+      "envelope": "{ \"data\": { ... } }",
+      "fields": {
+        "destination": {
+          "type": "string",
+          "required": true
+        },
+        "delivery_method": {
+          "type": "string",
+          "required": true,
+          "enum": "DELIVERY_METHODS"
+        },
+        "sms": {
+          "type": "object",
+          "required": false,
+          "notes": "Per-channel options travel in a block named after the delivery method; only the block matching delivery_method is read.",
+          "fields": {
+            "languages": {
+              "type": "array of string",
+              "required": false
+            },
+            "app_hash": {
+              "type": "string",
+              "required": false
+            }
+          }
+        },
+        "callout": {
+          "type": "object",
+          "required": false,
+          "fields": {
+            "languages": {
+              "type": "array of string",
+              "required": false
+            }
+          }
+        }
+      }
+    },
+    "reportVerification": {
+      "envelope": "{ \"data\": { ... } }",
+      "fields": {
+        "delivery_method": {
+          "type": "string",
+          "required": true,
+          "enum": "DELIVERY_METHODS",
+          "notes": "Must equal the verification's own delivery method, else delivery_method_invalid."
+        },
+        "code": {
+          "type": "string",
+          "required": "for sms and callout",
+          "notes": "Sending it on a channel that takes no code is code_value_present."
+        },
+        "cli": {
+          "type": "string",
+          "required": "for a channel that reports a caller id instead of a code",
+          "notes": "Sending it on any other channel is cli_value_present."
+        }
+      }
+    },
+    "notes": [
+      "A request body that is not an object with a 'data' object fails with parameter_missing (400).",
+      "Unknown keys inside 'data' are dropped, but a malformed value for a known key is a validation failure."
+    ]
+  },
+  "constraints": {
+    "destination": {
+      "acceptedPattern": "^\\+?[0-9]{8,15}$ after removing spaces, hyphens and parentheses",
+      "normalization": "every non-digit is stripped, the leading '+' included",
+      "notes": "A '.' is not a recognised separator, so '+371.12345678' is rejected rather than normalised."
+    },
+    "appHash": {
+      "pattern": "^[A-Za-z0-9+/]{11}$",
+      "length": 11,
+      "notes": "Validated on every start once supplied; a malformed hash fails the whole request with app_hash_invalid (422) rather than being ignored."
+    },
+    "codePlaceholder": {
+      "token": "{{CODE}}",
+      "notes": "The literal the template carries in place of the code, case-sensitive and required exactly once. The delivered message is the template with this token substituted, so a client recovering the code from an SMS splits the template on it."
+    },
+    "languageTag": {
+      "acceptedPattern": "^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})?$",
+      "canonicalization": "primary subtag lower-cased, region subtag upper-cased",
+      "fallback": "en-US",
+      "notes": "Validation accepts a bare primary subtag, but a catalogue is matched on the exact canonical tag, so 'pl' passes validation and then silently falls back to en-US. Send the region subtag. Tags are tried in order; the first that matches wins. Each channel resolves against its own catalogue — the set with an SMS template is not the set with an announcement recording — so one tag list can resolve differently per channel, and the response names which tag was used."
+    },
+    "generatedCodeLength": 6,
+    "verificationLifetimeSeconds": 120,
+    "interceptionTimeoutSeconds": 120,
+    "reportAttempts": {
+      "max": 3,
+      "notes": "The report that exceeds the limit answers 200 with status 'failed' and error_code 'too_many_attempts' — not a 4xx. Whether another attempt is allowed is the server's decision; do not count attempts locally."
+    },
+    "reportBeforeDispatch": "'pending' covers a window in which a report is refused with not_ready_to_report (422): the status is public, and the row underneath it has not finished dispatching. Treat that code as retryable rather than terminal.",
+    "finishedRetentionHours": 24,
+    "finishedRetentionNote": "A finished verification is hard-deleted after this, so a later read by id or by number answers 404 rather than returning the outcome. Persist anything you need beyond the window.",
+    "byNumberResolution": "the newest verification for that number, finished ones included",
+    "singleActiveVerification": "starting a verification supersedes any unfinished one for the same application and number; the superseded row reads as 'failed' with error_code 'superseded', reachable only by id",
+    "deniedStartDoesNotSupersede": "A start that is itself denied is the exception: it supersedes nothing, so an earlier unfinished verification stays live. Since a by_number read returns the newest row whatever its status, that read now answers with the denied one and the live verification is reachable only by its id. Hold the id from the start response rather than relying on by_number."
+  },
+  "authSchemes": {
+    "basic": {
+      "header": "Authorization: Basic base64(key + \":\" + secret)",
+      "documentedInSpec": true,
+      "notes": "Server-to-server only; the secret is recoverable from anything it ships in."
+    },
+    "public": {
+      "header": "Authorization: Application <key>",
+      "documentedInSpec": false,
+      "notes": "The key is an identifier, not a secret. A start authenticated this way is denied outright with denied_missing_callback_url when the application has no callback URL registered, because the callback is what authorizes it."
+    },
+    "application": {
+      "header": "Authorization: Application <key>:<signature>, plus x-timestamp",
+      "documentedInSpec": false,
+      "notes": "Dispatch is by the colon: 'Application <key>:<signature>' is this scheme, 'Application <key>' is public. Signed starts never trigger the outbound callback."
+    },
+    "notes": [
+      "Each application carries a minimum scheme, ranked public < basic < application; a request below it is rejected with 401.",
+      "Every failure — unknown key, wrong secret, bad signature, stale timestamp, too weak a scheme, a disabled account, an account with no verification plan — answers 401 with the 'unauthorized' code and no further detail."
+    ]
+  },
+  "signing": {
+    "algorithm": "HMAC-SHA256",
+    "signatureEncoding": "standard base64, padded",
+    "keyDerivation": "URL-safe base64 DECODE of the application secret; the raw bytes are the HMAC key, never the secret's characters",
+    "stringToSign": {
+      "lines": [
+        "<HTTP-METHOD>",
+        "<CONTENT-MD5>",
+        "<CONTENT-TYPE>",
+        "x-timestamp:<TIMESTAMP>",
+        "<PATH>"
+      ],
+      "joinedWith": "\n",
+      "notes": "Exactly five lines, no trailing newline."
+    },
+    "contentMd5": {
+      "value": "standard base64 of the MD5 digest of the request body bytes",
+      "emptyWhen": "the body is absent, empty, or whitespace only",
+      "notes": "A whitespace-only body signs as the empty string, not as the MD5 of the whitespace. Never send one."
+    },
+    "contentType": {
+      "value": "the exact Content-Type header value sent",
+      "emptyWhen": "no Content-Type header was sent",
+      "bodylessRequestSendsNoContentTypeHeader": true,
+      "notes": "A bodyless request must send NO Content-Type header at all and sign the empty string on that line. A transport that helpfully defaults a content type on every request 401s every signed GET, and no test that runs the client against its own signer can see it: the two agree with each other while both disagree with the server."
+    },
+    "path": {
+      "value": "the request-target path, undecoded, query excluded",
+      "notes": "Percent-encoded segments stay percent-encoded in the signed string. It must be byte-identical to the path in the request line."
+    },
+    "timestamp": {
+      "header": "x-timestamp",
+      "format": "Unix epoch SECONDS as a decimal string",
+      "replayWindowSeconds": 300,
+      "symmetric": true,
+      "notes": "The same value goes in the header and on the fourth line. Outside the window, or unparseable, is 401."
+    },
+    "headers": {
+      "authorization": "Authorization",
+      "timestamp": "x-timestamp"
+    }
+  },
+  "callback": {
+    "direction": "the API calls the application's registered callback URL and waits for the answer before the verification is created",
+    "sentWhen": "a start authenticated with basic or public and the application has a callback URL registered",
+    "notSentWhen": [
+      "the start was signed (application scheme) — the caller is already trusted",
+      "no callback URL is registered and the scheme is basic — the verification proceeds",
+      "no callback URL is registered and the scheme is public — the verification is created denied with denied_missing_callback_url, and no request is made"
+    ],
+    "request": {
+      "method": "POST",
+      "headers": {
+        "Content-Type": "application/json",
+        "Authorization": "Application <key>:<signature>",
+        "x-timestamp": "<unix epoch seconds>"
+      },
+      "body": {
+        "event": "verification_request",
+        "data": {
+          "id": "<verification id>",
+          "destination": "<digits only>",
+          "delivery_method": "<sms | callout>"
+        }
+      },
+      "retries": 0
+    },
+    "signing": {
+      "sameAlgorithmAs": "signing",
+      "method": "POST",
+      "contentType": "application/json",
+      "signedPath": "the path component of the REGISTERED callback URL, query excluded — not the path the request arrives on",
+      "bareOriginSignsEmptyString": true,
+      "notes": "A registered URL with no path — 'https://example.com' or 'https://example.com?x=1' — is signed against the EMPTY STRING, not '/'. Both are accepted at registration. A verifier that defaults to the received pathname computes a valid signature over '/', mismatches every time, and denies 100% of that application's verifications; the working value is '' and nobody guesses it."
+    },
+    "expectedResponse": {
+      "status": "2xx",
+      "contentType": "application/json",
+      "contentTypeEnforced": false,
+      "body": {
+        "action": "allow | deny"
+      },
+      "responseReadLimitBytes": 8192,
+      "notes": "Only the status and a parseable JSON body are enforced. The response Content-Type is never read, so a 2xx carrying valid JSON is accepted whatever its type. Send application/json anyway, but do not look here when diagnosing a denial."
+    },
+    "outcomes": {
+      "allow": "the verification proceeds",
+      "deny": "the verification is created denied with error_code denied_by_callback",
+      "anythingElse": "the verification is created denied with error_code denied_invalid_callback_response"
+    },
+    "anythingElseCovers": [
+      "any non-2xx status, whatever the body",
+      "a 2xx body that is not JSON",
+      "a 2xx JSON body whose 'action' is neither 'allow' nor 'deny', or is absent",
+      "a response larger than the read limit, whatever its status",
+      "a connection failure or a timeout"
+    ],
+    "notes": [
+      "There is no retry and no second chance: one request, one answer, and the verification is decided. Returning 401 does not make the API try again — it denies the verification.",
+      "The answer body should carry no diagnostic detail. Rejection reasons distinguish an unknown key from a bad signature, and echoing that turns the endpoint into an oracle for which application keys exist."
+    ]
+  }
+}

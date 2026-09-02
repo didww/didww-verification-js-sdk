@@ -1,0 +1,13 @@
+{
+  "name": "@didww/verification-core",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./out/index.js",
+  "files": [
+    "out",
+    "vendored-leaf"
+  ],
+  "dependencies": {
+    "fixture-leaf": "file:./vendored-leaf"
+  }
+}

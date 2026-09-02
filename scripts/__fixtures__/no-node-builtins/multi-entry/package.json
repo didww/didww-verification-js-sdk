@@ -1,0 +1,10 @@
+{
+  "name": "@didww/verification-react-native",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./out/commonjs/index.js",
+  "module": "./out/module/index.js",
+  "files": [
+    "out"
+  ]
+}

@@ -1,0 +1,43 @@
+pluginManagement {
+  def reactNativeGradlePlugin = new File(
+    providers.exec {
+      workingDir(rootDir)
+      commandLine("node", "--print", "require.resolve('@react-native/gradle-plugin/package.json', { paths: [require.resolve('react-native/package.json')] })")
+    }.standardOutput.asText.get().trim()
+  ).getParentFile().absolutePath
+  includeBuild(reactNativeGradlePlugin)
+
+  def expoPluginsPath = new File(
+    providers.exec {
+      workingDir(rootDir)
+      commandLine("node", "--print", "require.resolve('expo-modules-autolinking/package.json', { paths: [require.resolve('expo/package.json')] })")
+    }.standardOutput.asText.get().trim(),
+    "../android/expo-gradle-plugin"
+  ).absolutePath
+  includeBuild(expoPluginsPath)
+}
+
+plugins {
+  id("com.facebook.react.settings")
+  id("expo-autolinking-settings")
+}
+
+extensions.configure(com.facebook.react.ReactSettingsExtension) { ex ->
+  // The default working directory is rootDir/.., which is outside node_modules and exits 1.
+  ex.autolinkLibrariesFromCommand(expoAutolinking.rnConfigCommand, rootDir, files('package.json', 'package-lock.json'))
+}
+expoAutolinking.useExpoModules()
+
+rootProject.name = 'didww-verification-js-sdk'
+
+expoAutolinking.useExpoVersionCatalog()
+
+include ':didww-verification-react-native'
+project(':didww-verification-react-native').projectDir = file('packages/verification-react-native/android')
+
+// Must be named exactly 'app': ReactRootProjectPlugin and expo-max-sdk-override-plugin
+// both look the project up by that name.
+include ':app'
+project(':app').projectDir = file('manifest-probe')
+
+includeBuild(expoAutolinking.reactNativeGradlePlugin)

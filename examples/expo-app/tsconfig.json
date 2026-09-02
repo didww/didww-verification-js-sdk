@@ -1,0 +1,9 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "jsx": "react-jsx",
+    "types": ["react", "expo"]
+  },
+  "include": ["*.ts", "*.tsx", "*.d.ts", "app/**/*.tsx", "src/**/*.ts", "src/**/*.tsx"]
+}

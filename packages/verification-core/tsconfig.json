@@ -1,0 +1,16 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "rootDir": "src",
+    // Web-standard globals only. `lib: ES2022` alone has no `AbortSignal`, `URL`, `fetch`,
+    // `TextEncoder` or `btoa`, all of which this package needs and all of which exist on Node,
+    // Hermes, Bun, Deno and workers. `types` MUST stay empty: omitting it pulls in every
+    // `@types/*` in the workspace, and a Node global such as `Buffer` reaching this package is
+    // invisible to both CI guards — one reads the dependency tree, the other the import graph,
+    // and a bare global is neither. It would typecheck, ship, and throw on a device.
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "types": []
+  },
+  "include": ["src/**/*.ts", "src/**/*.tsx"]
+}

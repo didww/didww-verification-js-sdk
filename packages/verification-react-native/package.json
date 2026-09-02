@@ -1,0 +1,71 @@
+{
+  "name": "@didww/verification-react-native",
+  "version": "1.0.0",
+  "description": "React Native bindings for the DIDWW Verification API.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/didww/didww-verification-js-sdk.git",
+    "directory": "packages/verification-react-native"
+  },
+  "homepage": "https://github.com/didww/didww-verification-js-sdk/tree/main/packages/verification-react-native#readme",
+  "bugs": "https://github.com/didww/didww-verification-js-sdk/issues",
+  "main": "./lib/commonjs/index.js",
+  "module": "./lib/module/index.js",
+  "types": "./lib/typescript/index.d.ts",
+  "files": [
+    "lib",
+    "android/build.gradle",
+    "android/src/main",
+    "expo-module.config.json"
+  ],
+  "engines": {
+    "node": "^22.13.0 || ^24.3.0 || >= 25.0.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "dependencies": {
+    "@didww/verification-core": "^1.0.0"
+  },
+  "scripts": {
+    "build": "bob build",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "clean": "rm -rf lib"
+  },
+  "react-native-builder-bob": {
+    "source": "src",
+    "output": "lib",
+    "exclude": "**/{__tests__/**,__fixtures__/**,__mocks__/**,*.test.ts,*.test.tsx}",
+    "targets": [
+      "commonjs",
+      "module",
+      [
+        "typescript",
+        {
+          "project": "tsconfig.build.json"
+        }
+      ]
+    ]
+  },
+  "peerDependencies": {
+    "expo-modules-core": "*",
+    "react": ">=18.0.0",
+    "react-native": ">=0.73.0"
+  },
+  "peerDependenciesMeta": {
+    "expo-modules-core": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@testing-library/dom": "^10.4.1",
+    "@testing-library/react": "^16.3.2",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.5",
+    "jsdom": "^29.1.1",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "react-native-builder-bob": "^0.43.0"
+  }
+}

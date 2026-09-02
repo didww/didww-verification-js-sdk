@@ -1,0 +1,46 @@
+{
+  "name": "@didww/verification-core",
+  "version": "1.0.0",
+  "description": "Runtime-agnostic client for the DIDWW Verification API.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/didww/didww-verification-js-sdk.git",
+    "directory": "packages/verification-core"
+  },
+  "homepage": "https://github.com/didww/didww-verification-js-sdk/tree/main/packages/verification-core#readme",
+  "bugs": "https://github.com/didww/didww-verification-js-sdk/issues",
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./testing": {
+      "types": "./dist/testing/index.d.ts",
+      "import": "./dist/testing/index.js",
+      "require": "./dist/testing/index.cjs"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "clean": "rm -rf dist",
+    "prepublishOnly": "npm run build"
+  }
+}

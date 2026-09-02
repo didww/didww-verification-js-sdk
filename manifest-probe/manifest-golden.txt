@@ -1,0 +1,9 @@
+manifest/application
+manifest/application/activity  com.google.android.gms.common.api.GoogleApiActivity
+manifest/application/meta-data  com.google.android.gms.version
+manifest/application/provider  androidx.startup.InitializationProvider
+manifest/application/receiver  androidx.profileinstaller.ProfileInstallReceiver
+manifest/application@appComponentFactory  androidx.core.app.CoreComponentFactory
+manifest/permission  com.didww.verification.rn.probe.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION
+manifest/uses-permission  com.didww.verification.rn.probe.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION
+manifest/uses-sdk

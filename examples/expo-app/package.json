@@ -1,0 +1,34 @@
+{
+  "name": "didww-verification-expo-example",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Expo example app for @didww/verification-react-native: both channels, every hook state, and the app hash read off the running build.",
+  "license": "MIT",
+  "main": "index.ts",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "expo start",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
+    "prebuild": "expo prebuild",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@didww/verification-core": "file:../../packages/verification-core",
+    "@didww/verification-react-native": "file:../../packages/verification-react-native",
+    "expo": "~57.0.16",
+    "expo-modules-core": "~57.0.13",
+    "react": "19.2.8",
+    "react-native": "0.86.2"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.18",
+    "typescript": "^6.0.3"
+  },
+  "overrides": {
+    "react": "19.2.8",
+    "react-native": "0.86.2"
+  }
+}

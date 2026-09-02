@@ -1,0 +1,137 @@
+plugins {
+  id 'com.android.application'
+  id 'org.jetbrains.kotlin.android'
+}
+
+// Never published. Declares nothing of its own and depends only on the module, so its
+// merged manifest is exactly what an integrator inherits.
+android {
+  namespace 'com.didww.verification.rn.probe'
+  compileSdk rootProject.ext.compileSdkVersion
+
+  defaultConfig {
+    applicationId 'com.didww.verification.rn.probe'
+    minSdk rootProject.ext.minSdkVersion
+    targetSdk rootProject.ext.targetSdkVersion
+    versionCode 1
+    versionName '1.0.0'
+  }
+
+  compileOptions {
+    sourceCompatibility JavaVersion.VERSION_17
+    targetCompatibility JavaVersion.VERSION_17
+  }
+}
+
+dependencies {
+  implementation project(':didww-verification-react-native')
+}
+
+// Enumerates the merged manifest BY POSITION rather than by an allowlist of element types,
+// so a Play Services bump that contributes a <service> or a <permission> nobody typed fails
+// the build instead of slipping past.
+abstract class ManifestGoldenGuard extends DefaultTask {
+
+  @InputFile
+  @PathSensitive(PathSensitivity.NONE)
+  abstract RegularFileProperty getMergedManifest()
+
+  // @InputFiles, not @InputFile: the golden is allowed to be absent (first run, update mode)
+  // but must still be fingerprinted, or editing it would leave the task UP-TO-DATE.
+  @InputFiles
+  @PathSensitive(PathSensitivity.NONE)
+  abstract ConfigurableFileCollection getGoldenFile()
+
+  @Input
+  abstract Property<Boolean> getUpdateGolden()
+
+  @OutputFile
+  abstract RegularFileProperty getActualOut()
+
+  @TaskAction
+  void verify() {
+    def file = mergedManifest.get().asFile
+    if (!file.isFile() || file.length() == 0L) {
+      throw new GradleException("merged manifest at ${file.path} is missing or empty")
+    }
+    def ns = 'http://schemas.android.com/apk/res/android'
+    def factory = javax.xml.parsers.DocumentBuilderFactory.newInstance()
+    factory.namespaceAware = true
+    def root = factory.newDocumentBuilder().parse(file).documentElement
+
+    def children = { org.w3c.dom.Element node ->
+      (0..<node.childNodes.length)
+        .collect { node.childNodes.item(it) }
+        .findAll { it instanceof org.w3c.dom.Element }
+    }
+    def entries = new TreeSet<String>()
+    def record = { String path, org.w3c.dom.Element el ->
+      def name = el.getAttributeNS(ns, 'name') ?: ''
+      entries << (name.isEmpty() ? "${path}/${el.tagName}" : "${path}/${el.tagName}  ${name}").toString()
+    }
+
+    children(root).each { child ->
+      record('manifest', child)
+      if (child.tagName == 'application') {
+        def factoryAttr = child.getAttributeNS(ns, 'appComponentFactory')
+        if (factoryAttr) { entries << "manifest/application@appComponentFactory  ${factoryAttr}".toString() }
+        children(child).each { record('manifest/application', it) }
+      } else if (child.tagName == 'queries') {
+        children(child).each { record('manifest/queries', it) }
+      }
+    }
+    if (entries.isEmpty()) {
+      throw new GradleException('extracted nothing from the merged manifest; the guard is checking nothing')
+    }
+
+    // Stated separately from the golden: the golden catches additions, naming the three
+    // permissions is what makes the criterion itself readable.
+    ['android.permission.RECEIVE_SMS', 'android.permission.READ_SMS', 'android.permission.READ_CALL_LOG'].each { perm ->
+      if (entries.any { it.endsWith("  ${perm}") }) {
+        throw new GradleException("the SDK now makes integrators inherit ${perm}")
+      }
+    }
+
+    actualOut.get().asFile.text = entries.join('\n') + '\n'
+
+    def golden = goldenFile.singleFile
+    if (updateGolden.get()) {
+      golden.text = entries.join('\n') + '\n'
+      logger.lifecycle("manifestGolden: rewrote ${golden.path} with ${entries.size()} entries")
+      return
+    }
+    if (!golden.isFile()) {
+      throw new GradleException(
+        "no golden at ${golden.path}; generate it with ./gradlew :app:manifestGolden -Pmanifest.golden.update=true")
+    }
+
+    def expected = new TreeSet<String>(golden.readLines().findAll { !it.trim().isEmpty() })
+    def added = entries.findAll { !expected.contains(it) }
+    def removed = expected.findAll { !entries.contains(it) }
+    if (added || removed) {
+      def diff = added.collect { "  + ${it}" } + removed.collect { "  - ${it}" }
+      throw new GradleException(
+        "merged manifest does not match ${golden.path}\n" +
+        "  + present in the merged manifest, absent from the golden\n" +
+        "  - present in the golden, absent from the merged manifest\n" +
+        diff.join('\n') + '\n' +
+        "if this change is intended, regenerate with ./gradlew :app:manifestGolden -Pmanifest.golden.update=true")
+    }
+    logger.lifecycle("manifestGolden: ${entries.size()} inherited manifest entries match the golden")
+  }
+}
+
+androidComponents {
+  onVariants(selector().withName('release')) { variant ->
+    def guard = tasks.register('manifestGolden', ManifestGoldenGuard) {
+      group = 'verification'
+      description = 'Freezes the merged manifest an integrator inherits from this SDK'
+      mergedManifest.set(variant.artifacts.get(com.android.build.api.artifact.SingleArtifact.MERGED_MANIFEST.INSTANCE))
+      goldenFile.setFrom(layout.projectDirectory.file('manifest-golden.txt'))
+      // -Pmanifest.golden.update=true rewrites the golden instead of failing.
+      updateGolden.set(providers.gradleProperty('manifest.golden.update').map { it == 'true' }.orElse(false))
+      actualOut.set(layout.buildDirectory.file('manifest-actual.txt'))
+    }
+    tasks.named('check') { dependsOn(guard) }
+  }
+}

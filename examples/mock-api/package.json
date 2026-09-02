@@ -1,0 +1,16 @@
+{
+  "name": "mock-verification-api",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Zero-dependency mock of the DIDWW Verification API, for running the examples and tests without credentials.",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "tsx src/server.ts",
+    "proof": "tsx proof/run.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  }
+}

@@ -1,0 +1,29 @@
+node_modules/
+dist/
+lib/
+coverage/
+*.tgz
+.DS_Store
+.env
+.env.local
+*.log
+
+# Android
+.gradle/
+.kotlin/
+build/
+local.properties
+.cxx/
+
+# Expo / Metro
+.expo/
+.expo-shared/
+android/app/build/
+ios/Pods/
+
+# `expo prebuild` output: generated native projects, never committed
+examples/expo-app/android/
+examples/expo-app/ios/
+
+# Local tooling state, never part of the SDK
+.omc/

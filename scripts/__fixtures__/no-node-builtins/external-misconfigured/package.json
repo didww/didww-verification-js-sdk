@@ -1,0 +1,12 @@
+{
+  "name": "@didww/verification-react-native",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./out/index.js",
+  "files": [
+    "out"
+  ],
+  "peerDependencies": {
+    "@didww/verification-core": "^0.1.0"
+  }
+}

@@ -1,0 +1,47 @@
+{
+  "name": "didww-verification-js-sdk",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Monorepo for the DIDWW Verification JavaScript SDKs.",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "clean": "npm run clean --workspaces --if-present",
+    "typecheck": "npm run build --workspace @didww/verification-core --workspace @didww/verification-node && npm run typecheck --workspaces --if-present && tsc --noEmit -p examples/mock-api/tsconfig.json && tsc --noEmit -p examples/node-server/tsconfig.json",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "vitest run --project='!e2e'",
+    "test:coverage": "vitest run --coverage --project='!e2e'",
+    "test:e2e": "vitest run --project e2e",
+    "check:zero-deps": "node scripts/check-zero-deps.mjs",
+    "check:no-node-builtins": "node scripts/check-no-node-builtins.mjs",
+    "check:package-metadata": "node scripts/check-package-metadata.mjs",
+    "check:no-internal-refs": "node scripts/check-no-internal-refs.mjs",
+    "check:no-internal-dir": "node scripts/check-no-internal-dir.mjs"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^24.10.1",
+    "@vitest/coverage-v8": "^4.1.11",
+    "esbuild": "^0.28.2",
+    "eslint": "^10.9.1",
+    "expo": "~57.0.16",
+    "expo-modules-core": "~57.0.13",
+    "prettier": "^3.9.6",
+    "react-native": "^0.86.2",
+    "tsup": "^8.5.1",
+    "tsx": "^4.23.12",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.68.0",
+    "vitest": "^4.1.11"
+  }
+}

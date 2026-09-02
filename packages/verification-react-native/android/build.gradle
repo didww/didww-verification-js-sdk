@@ -1,0 +1,42 @@
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'com.didww.verification.rn'
+version = '1.0.0'
+
+android {
+  namespace "com.didww.verification.rn"
+  defaultConfig {
+    // expo-module-gradle-plugin fails at configuration time without both of these.
+    versionCode 1
+    versionName "1.0.0"
+    testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+  }
+  lintOptions {
+    abortOnError false
+  }
+  testOptions {
+    // Robolectric needs the merged manifest to resolve the package under test.
+    unitTests.includeAndroidResources = true
+  }
+}
+
+dependencies {
+  // Pinned. 18.3.1 carries Kotlin metadata 2.3.0 while Expo SDK 57 pins Kotlin 2.1.20, and the
+  // build then fails inside expo-modules-core without naming this dependency.
+  implementation 'com.google.android.gms:play-services-auth-api-phone:18.2.0'
+  implementation 'androidx.core:core:1.16.0'
+
+  // expo-module-gradle-plugin already puts :expo-modules-core on the unit-test classpath.
+  testImplementation 'junit:junit:4.13.2'
+  // Test-only: the app-hash algorithm is asserted on a plain JVM; only the PackageManager reads
+  // (rotation order, null signingInfo) need an Android runtime.
+  testImplementation 'org.robolectric:robolectric:4.16.1'
+
+  // On-device only: the app hash is the one value no off-device test can produce, because it is
+  // derived from the certificate the installed build is actually signed with.
+  androidTestImplementation 'androidx.test.ext:junit:1.2.1'
+  androidTestImplementation 'androidx.test:runner:1.6.2'
+}

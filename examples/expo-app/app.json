@@ -1,0 +1,19 @@
+{
+  "expo": {
+    "name": "DIDWW Verification Example",
+    "slug": "didww-verification-example",
+    "scheme": "didww-verification-example",
+    "version": "0.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "ios": {
+      "bundleIdentifier": "com.example.didwwverification",
+      "supportsTablet": true
+    },
+    "android": {
+      "package": "com.example.didwwverification",
+      "edgeToEdgeEnabled": true
+    }
+  }
+}

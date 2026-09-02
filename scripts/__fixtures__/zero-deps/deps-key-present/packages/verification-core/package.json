@@ -1,0 +1,10 @@
+{
+  "name": "@didww/verification-core",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./out/index.js",
+  "files": [
+    "out"
+  ],
+  "dependencies": {}
+}

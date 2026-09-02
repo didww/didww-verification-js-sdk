@@ -1,0 +1,157 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+    # `labeled` is here so applying `ci:full` re-runs the workflow and pulls the expensive jobs
+    # onto the pull request. Any other label triggers a run too -- GitHub cannot filter types by
+    # label name -- so every job below skips on a `labeled` event that is not that label, and a
+    # stray label costs nothing.
+    types: [opened, synchronize, reopened, labeled]
+  workflow_dispatch:
+    inputs:
+      android:
+        description: Build and check the Android module (~10 minutes)
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: Quality
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    if: github.event.action != 'labeled' || github.event.label.name == 'ci:full'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          # Both lockfiles. With only the root one hashed, the Expo example's packages survive in
+          # ~/.npm by accident -- the post-step saves whatever the job left there -- and stop
+          # doing so the moment the root lockfile moves alone.
+          cache-dependency-path: |
+            package-lock.json
+            examples/expo-app/package-lock.json
+      - run: npm ci
+      # The Expo example resolves both packages through `file:` links to their built output, and
+      # `typecheck` builds only core and node.
+      - run: npm run build
+      # `typecheck` builds core first: both dependents resolve it through its exports map to a
+      # gitignored dist, so a clean checkout has nothing to resolve until it is built.
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm run format:check
+      - run: npm run check:package-metadata
+      - run: npm run check:no-internal-refs
+
+      # Part of "check that it builds": a packaging break is otherwise invisible until publish,
+      # and this is a first publish. check-package-metadata asserts the files allowlist
+      # statically; this asserts what npm actually produces from it.
+      - name: Pack every package
+        run: |
+          npm pack --dry-run \
+            -w @didww/verification-core \
+            -w @didww/verification-node \
+            -w @didww/verification-react-native
+
+      # examples/* are deliberately not workspace members, and the Expo app carries its own
+      # node_modules pinned to the same react-native the Gradle build needs. It lives here rather
+      # than with the Android job because it typechecks against core, which that job never sees.
+      - name: Typecheck the Expo example
+        run: |
+          npm --prefix examples/expo-app ci
+          npm --prefix examples/expo-app run typecheck
+
+  test:
+    name: Test (node ${{ matrix.node }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    if: github.event.action != 'labeled' || github.event.label.name == 'ci:full'
+    strategy:
+      fail-fast: false
+      matrix:
+        # A pull request tests the version .nvmrc pins and nothing else. The second major is a
+        # compatibility check, not a correctness one, so it runs on main and on demand -- an
+        # expression here rather than a second job, which would duplicate every step.
+        # The ternary picks between two *strings* and parses the winner: GitHub documents the cast
+        # to boolean for strings, and does not for arrays.
+        node: ${{ fromJSON((github.event_name != 'pull_request' ||
+          contains(github.event.pull_request.labels.*.name, 'ci:full')) && '["22", "24"]' ||
+          '["22"]') }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm ci
+      # Measured: without this the suite fails with "Failed to resolve entry for package
+      # @didww/verification-core". The tests import the package by name, not by path.
+      - run: npm run build
+      # Coverage thresholds live in vitest.config.ts and are enforced here, not merely computed.
+      - run: npm run test:coverage
+      # A second vitest invocation rather than a project inside the run above: the oracle boots
+      # two servers of its own and starves the HTTP tests when they share one run.
+      - run: npm run test:e2e
+      # Both inspect built output and neither can differ across Node majors -- one is an esbuild
+      # bundle, the other a packed tarball -- so they run on one leg rather than both.
+      - if: matrix.node == '22'
+        run: npm run check:zero-deps
+      - if: matrix.node == '22'
+        run: npm run check:no-node-builtins
+
+  android:
+    name: Android
+    needs: quality
+    # Opt-in: this job is ten minutes against eighty seconds for the whole JavaScript half, so it
+    # is asked for rather than assumed. Two ways in, both deliberate -- a dispatch with the box
+    # ticked, or `ci:full` on a pull request. Nothing native is built automatically, so a release
+    # runs the Gradle build locally before publishing. `needs: quality` carries an implicit
+    # success(), so a red Quality skips this rather than spending ten minutes on a branch that
+    # does not lint.
+    if: >-
+      (github.event_name == 'workflow_dispatch' && inputs.android) ||
+      contains(github.event.pull_request.labels.*.name, 'ci:full')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: package-lock.json
+      # The root build's Java toolchain pins compilation to 17; this installs one for it to find,
+      # and gives Gradle itself a JDK new enough for the Android plugin.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+      # Robolectric fetches its android-all runtime through its own Maven client, outside Gradle's
+      # resolution, so setup-gradle's cache does not cover it. One jar is ~144 MB.
+      - uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository/org/robolectric
+          key: robolectric-${{ runner.os }}-${{
+            hashFiles('packages/verification-react-native/android/build.gradle') }}
+          restore-keys: robolectric-${{ runner.os }}-
+
+      # No `npm run build`: Gradle resolves the React Native and Expo plugins out of node_modules
+      # and never reads the built TypeScript.
+      - run: npm ci
+
+      - name: Android library, unit tests and the inherited-manifest golden
+        run: ./gradlew --no-daemon :didww-verification-react-native:assemble :didww-verification-react-native:test :app:check

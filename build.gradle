@@ -1,0 +1,51 @@
+import groovy.json.JsonSlurper
+
+buildscript {
+  repositories { google(); mavenCentral() }
+  dependencies {
+    classpath('com.android.tools.build:gradle')
+    classpath('org.jetbrains.kotlin:kotlin-gradle-plugin')
+  }
+}
+
+// react-android and hermes-android are declared version-less by every RN library; the version is
+// normally injected by the RN Gradle plugin, which only does so from a com.android.application
+// module. This build has none of an app's other machinery, so it reads the version from the
+// installed package rather than hardcoding a second source of truth.
+def reactNativeVersion = new JsonSlurper()
+  .parse(file('node_modules/react-native/package.json')).version
+
+allprojects {
+  repositories { google(); mavenCentral() }
+
+  // The RN Gradle plugin normally aligns javac and Kotlin on 17 across every module, but only from
+  // a com.android.application module. Without that, expo-modules-core compiles Kotlin at 17 and
+  // Java at 8 and Gradle rejects the pair.
+  ['com.android.application', 'com.android.library'].each { id ->
+    pluginManager.withPlugin(id) {
+      extensions.getByName('android').compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+      }
+    }
+  }
+
+  // Pins compilation to 17 independently of the JDK Gradle itself was launched on, so the build
+  // does not depend on JAVA_HOME naming a 17 -- which has no portable spelling across hosts.
+  pluginManager.withPlugin('java-base') {
+    extensions.getByName('java').toolchain {
+      languageVersion = JavaLanguageVersion.of(17)
+    }
+  }
+
+  configurations.configureEach {
+    resolutionStrategy.eachDependency { details ->
+      def requested = details.requested
+      if (requested.group in ['com.facebook.react', 'com.facebook.hermes'] && !requested.version) {
+        details.useVersion(reactNativeVersion)
+      }
+    }
+  }
+}
+
+apply plugin: "expo-root-project"

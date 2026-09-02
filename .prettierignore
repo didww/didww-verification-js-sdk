@@ -1,0 +1,13 @@
+node_modules/
+dist/
+lib/
+coverage/
+package-lock.json
+contract/wire-contract.json
+**/android/build/
+**/.gradle/
+.omc/
+
+# `expo prebuild` output
+examples/expo-app/android/
+examples/expo-app/ios/

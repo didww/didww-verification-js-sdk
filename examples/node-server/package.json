@@ -1,0 +1,15 @@
+{
+  "name": "node-server-example",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Express backend for a mobile verification app: a start/report proxy and the inbound callback gate.",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "tsx src/server.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  }
+}

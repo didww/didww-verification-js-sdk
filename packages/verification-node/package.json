@@ -1,0 +1,50 @@
+{
+  "name": "@didww/verification-node",
+  "version": "1.0.0",
+  "description": "Node.js bindings for the DIDWW Verification API: signed application auth and the inbound callback gate.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/didww/didww-verification-js-sdk.git",
+    "directory": "packages/verification-node"
+  },
+  "homepage": "https://github.com/didww/didww-verification-js-sdk/tree/main/packages/verification-node#readme",
+  "bugs": "https://github.com/didww/didww-verification-js-sdk/issues",
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "dependencies": {
+    "@didww/verification-core": "^1.0.0"
+  },
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "clean": "rm -rf dist"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.6",
+    "@types/supertest": "^7.2.1",
+    "express": "^5.2.1",
+    "express4": "npm:express@^4.22.2",
+    "supertest": "^7.2.2"
+  }
+}
