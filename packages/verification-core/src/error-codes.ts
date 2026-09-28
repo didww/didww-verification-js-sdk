@@ -48,6 +48,7 @@ export const API_ERROR_CODES = [
   'balance_insufficient',
   'validation_failed',
   'internal_error',
+  'destination_in_cooldown',
   ...VERIFICATION_ERROR_CODES,
 ] as const;
 

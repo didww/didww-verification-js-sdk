@@ -46,6 +46,9 @@ if (CALLBACK_RETRIES !== 0) {
 const DEFAULT_CODE = '123456';
 const DEFAULT_FEE = '0.0345';
 const DEFAULT_CALLBACK_TIMEOUT_MS = 5_000;
+// Matches the production window. A proof or e2e suite that starts several verifications for the
+// same destination back to back passes `cooldownSeconds: 0`.
+const DEFAULT_COOLDOWN_SECONDS = 30;
 
 if (DEFAULT_CODE.length !== GENERATED_CODE_LENGTH) {
   throw new Error(`the fixed code must be ${String(GENERATED_CODE_LENGTH)} characters`);
@@ -61,6 +64,8 @@ export interface MockApiOptions {
   fee?: string;
   verificationLifetimeSeconds?: number;
   callbackTimeoutMs?: number;
+  /** Seconds a repeat start for the same application and destination is refused with 429. 0 disables it. */
+  cooldownSeconds?: number;
   /** Log one line per request, body included. Off by default; headers are never logged. */
   logRequests?: boolean;
 }
@@ -275,6 +280,20 @@ function sendErrors(response: ServerResponse, status: number, codes: readonly st
   });
 }
 
+// Whole seconds, at least 1, so a caller that arms a timer off the header never gets 0 or a
+// fraction and retries before the server would accept it again.
+function sendCooldown(response: ServerResponse, retryAfterSeconds: number): void {
+  const body = JSON.stringify({
+    errors: [{ code: CODE.destinationInCooldown, detail: errorDetail(CODE.destinationInCooldown) }],
+  });
+  response.writeHead(429, {
+    'content-type': 'application/json; charset=utf-8',
+    'content-length': Buffer.byteLength(body),
+    'retry-after': String(retryAfterSeconds),
+  });
+  response.end(body);
+}
+
 function sendVerification(
   response: ServerResponse,
   status: number,
@@ -368,6 +387,19 @@ function readStartRequest(data: Record<string, unknown>): StartRequest | string[
     language,
     appHash,
   };
+}
+
+// `row` is already the newest non-denied row inside the window, or undefined — see
+// `MockState.newestNonDeniedWithin`. Whole seconds, at least 1, so a caller that arms a timer off
+// the header never gets 0 or a fraction and retries before the server would accept it again.
+function cooldownRetryAfterSeconds(
+  row: VerificationRow | undefined,
+  at: number,
+  cooldownSeconds: number,
+): number | null {
+  if (row === undefined) return null;
+  const remainingMs = row.createdAt + cooldownSeconds * 1000 - at;
+  return remainingMs <= 0 ? null : Math.max(1, Math.ceil(remainingMs / 1000));
 }
 
 /** The path component of the REGISTERED URL, query excluded — '' when it carries no path. */
@@ -547,7 +579,16 @@ export function createMockApi(options: MockApiOptions = {}): MockApi {
     lifetimeSeconds: options.verificationLifetimeSeconds ?? VERIFICATION_LIFETIME_SECONDS,
   });
   const callbackTimeoutMs = options.callbackTimeoutMs ?? DEFAULT_CALLBACK_TIMEOUT_MS;
+  const cooldownSeconds = options.cooldownSeconds ?? DEFAULT_COOLDOWN_SECONDS;
   const host = options.host ?? '127.0.0.1';
+
+  // Holds an (application, destination) pair from the cooldown check through row creation, the
+  // span `decideStart` awaits the customer callback over. Without it, two starts issued back to
+  // back both read the same rows and both pass the check; the backend closes this with a
+  // per-destination lock and a re-check inside it, which this reservation stands in for.
+  const reservedDestinations = new Set<string>();
+  const reservationKey = (applicationKey: string, destination: string): string =>
+    `${applicationKey}\u0000${destination}`;
 
   const startVerification: Handler = async (context) => {
     const data = dataOf(context.body);
@@ -561,30 +602,64 @@ export function createMockApi(options: MockApiOptions = {}): MockApi {
       return;
     }
 
-    const id = newVerificationId();
-    const decision = await decideStart(
-      context.application,
-      context.scheme,
-      { id, destination: parsed.destination, delivery_method: parsed.deliveryMethod },
-      callbackTimeoutMs,
-    );
+    const key = reservationKey(context.application.key, parsed.destination);
+    if (cooldownSeconds > 0) {
+      if (reservedDestinations.has(key)) {
+        sendCooldown(context.response, Math.max(1, Math.ceil(cooldownSeconds)));
+        return;
+      }
+      reservedDestinations.add(key);
+    }
 
-    state.supersede(context.application.key, parsed.destination);
-    const row = state.create(
-      {
-        applicationKey: context.application.key,
-        id,
-        destination: parsed.destination,
-        deliveryMethod: parsed.deliveryMethod,
-        status: decision.status,
-        errorCode: decision.errorCode,
-        template: parsed.template,
-        language: parsed.language,
-        appHash: parsed.appHash,
-      },
-      context.at,
-    );
-    sendVerification(context.response, 201, row, context.at);
+    try {
+      const retryAfterSeconds =
+        cooldownSeconds > 0
+          ? cooldownRetryAfterSeconds(
+              state.newestNonDeniedWithin(
+                context.application.key,
+                parsed.destination,
+                cooldownSeconds * 1000,
+                context.at,
+              ),
+              context.at,
+              cooldownSeconds,
+            )
+          : null;
+      if (retryAfterSeconds !== null) {
+        sendCooldown(context.response, retryAfterSeconds);
+        return;
+      }
+
+      const id = newVerificationId();
+      const decision = await decideStart(
+        context.application,
+        context.scheme,
+        { id, destination: parsed.destination, delivery_method: parsed.deliveryMethod },
+        callbackTimeoutMs,
+      );
+      // The backend anchors the cooldown on the row's creation time, set once the callback has
+      // answered — not on the moment the request arrived.
+      const createdAt = Date.now();
+
+      state.supersede(context.application.key, parsed.destination);
+      const row = state.create(
+        {
+          applicationKey: context.application.key,
+          id,
+          destination: parsed.destination,
+          deliveryMethod: parsed.deliveryMethod,
+          status: decision.status,
+          errorCode: decision.errorCode,
+          template: parsed.template,
+          language: parsed.language,
+          appHash: parsed.appHash,
+        },
+        createdAt,
+      );
+      sendVerification(context.response, 201, row, createdAt);
+    } finally {
+      if (cooldownSeconds > 0) reservedDestinations.delete(key);
+    }
   };
 
   const rowById = (context: RequestContext): VerificationRow | undefined =>
@@ -727,6 +802,7 @@ if (invokedDirectly) {
     port: Number(process.env.PORT ?? '4000'),
     callbackBaseUrl: process.env.CALLBACK_BASE_URL ?? DEFAULT_CALLBACK_BASE_URL,
     logRequests: process.env.LOG_REQUESTS === '1',
+    cooldownSeconds: Number(process.env.COOLDOWN_SECONDS ?? String(DEFAULT_COOLDOWN_SECONDS)),
   });
   await api.listen();
   console.log(`mock verification API listening on ${api.url}`);

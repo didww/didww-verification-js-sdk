@@ -4,6 +4,12 @@ Notable changes to `@didww/verification-react-native`.
 
 This package follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 1.1.0 — 2026-10
+
+- Kept in step with `@didww/verification-core` 1.1.0 (`SmsInfo.codeLength`/`CalloutInfo.codeLength`,
+  `destination_in_cooldown`, `RateLimitedError`), both carried through `state.sms`/`state.callout`
+  unchanged. No change to this package's own code.
+
 ## 1.0.0 — 2026-09
 
 First release.

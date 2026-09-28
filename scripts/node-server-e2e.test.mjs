@@ -167,6 +167,9 @@ beforeAll(async () => {
   api = createMockApi({
     port: 0,
     code: CODE,
+    // Every destination below is distinct, but the point of this option is not to have to keep it
+    // that way: the flows here are about the callback gate, not the cooldown.
+    cooldownSeconds: 0,
     applications: [
       {
         key: KEYS.allow,

@@ -19,6 +19,7 @@ export {
   DecodingError,
   DidwwError,
   NotFoundError,
+  RateLimitedError,
   ServerError,
   TransportError,
   UnauthorizedError,

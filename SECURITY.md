@@ -11,4 +11,6 @@ in a mobile or browser build exposes the secret to anyone who unpacks it. Client
 `public` auth, which carries no secret, or call your own server.
 
 `@didww/verification-core` never writes a credential to a log. The optional logger records method,
-URL and status, and masks runs of six or more digits so a `by_number` path cannot leak a destination.
+URL and status, and masks every run of four or more digits that is not part of a UUID, so neither a
+`by_number` path nor a verification code — 4 to 8 digits, chosen by the server — can leak. Ports,
+years and durations are masked with them; verification ids stay readable for support.

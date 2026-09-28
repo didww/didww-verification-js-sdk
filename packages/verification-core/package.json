@@ -1,6 +1,6 @@
 {
   "name": "@didww/verification-core",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Runtime-agnostic client for the DIDWW Verification API.",
   "license": "MIT",
   "repository": {

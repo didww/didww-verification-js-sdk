@@ -138,7 +138,10 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+      # The action's default also installs `tools`, which current cmdline-tools no longer ship.
       - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
       - uses: gradle/actions/setup-gradle@v4
       # Robolectric fetches its android-all runtime through its own Maven client, outside Gradle's
       # resolution, so setup-gradle's cache does not cover it. One jar is ~144 MB.
