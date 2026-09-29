@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { AuthProvider, AuthRequest } from './auth.js';
 import { PRODUCTION_BASE_URL, SANDBOX_BASE_URL, VerificationClient } from './client.js';
 import {
@@ -14,6 +14,7 @@ import {
 import { INTERNAL_APP_HASH_KEY, type ClientOptions, type InternalSmsOptions } from './options.js';
 import { fakeTransport } from './testing/index.js';
 import type { HttpRequest, HttpResponse, Transport } from './transport.js';
+import { CORE_VERSION } from './version.js';
 
 const DESTINATION = '+4915112345678';
 const VALID_APP_HASH = 'abcdEFGH+/1';
@@ -80,6 +81,10 @@ function failureOf(promise: Promise<unknown>): Promise<unknown> {
     () => null,
     (error: unknown) => error,
   );
+}
+
+function xUserAgentKeys(headers: Readonly<Record<string, string>>): readonly string[] {
+  return Object.keys(headers).filter((name) => name.toLowerCase() === 'x-user-agent');
 }
 
 describe('base URLs', () => {
@@ -358,20 +363,79 @@ describe('the bodyless-request invariant', () => {
 });
 
 describe('headers', () => {
-  it('sends a User-Agent only when one was configured', async () => {
-    const withAgent = setup([OK], { userAgent: 'demo/1.0' });
-    await withAgent.client.getVerification('ver-1');
-    expect(only(withAgent.requests).headers['User-Agent']).toBe('demo/1.0');
+  it('ignores the deprecated userAgent option', async () => {
+    const { client, requests } = setup([OK], { userAgent: 'demo/1.0' });
+    await client.getVerification('ver-1');
+    const headers = only(requests).headers;
+    expect('User-Agent' in headers).toBe(false);
+    expect(headers['X-User-Agent']).toBe(`didww-verification-node/${CORE_VERSION}`);
+  });
 
-    const withoutAgent = setup([OK]);
-    await withoutAgent.client.getVerification('ver-1');
-    expect('User-Agent' in only(withoutAgent.requests).headers).toBe(false);
+  it('does not let an AuthProvider overwrite X-User-Agent', async () => {
+    const { transport, requests } = fakeTransport([OK]);
+    const auth: AuthProvider = {
+      headers: () => ({ 'X-User-Agent': 'attacker/1.0' }),
+    };
+    const client = new VerificationClient({ auth, transport });
+    await client.getVerification('ver-1');
+    const headers = only(requests).headers;
+    expect(headers['X-User-Agent']).toBe(`didww-verification-node/${CORE_VERSION}`);
+    expect(xUserAgentKeys(headers)).toEqual(['X-User-Agent']);
+  });
+
+  it('does not let a differently-cased AuthProvider header merge with X-User-Agent', async () => {
+    const { transport, requests } = fakeTransport([OK]);
+    const auth: AuthProvider = {
+      headers: () => ({ 'x-user-agent': 'attacker/1.0', 'X-USER-AGENT': 'attacker/2.0' }),
+    };
+    const client = new VerificationClient({ auth, transport });
+    await client.getVerification('ver-1');
+    const headers = only(requests).headers;
+    expect(xUserAgentKeys(headers)).toEqual(['X-User-Agent']);
+    expect(headers['X-User-Agent']).toBe(`didww-verification-node/${CORE_VERSION}`);
   });
 
   it('always asks for JSON', async () => {
     const { client, requests } = setup([OK]);
     await client.getVerification('ver-1');
     expect(only(requests).headers['Accept']).toBe('application/json');
+  });
+
+  it('sends X-User-Agent, detected once at construction', async () => {
+    const { client, requests } = setup([OK]);
+    await client.getVerification('ver-1');
+    expect(only(requests).headers['X-User-Agent']).toBe(`didww-verification-node/${CORE_VERSION}`);
+  });
+});
+
+// Real Node, running these tests, already has a `navigator` global (with no `product`) and a real
+// `process`, so `defaultXUserAgent` picks the node branch with no stubbing at all -- covered above.
+// These stub the other two branches, and Node reporting React Native ahead of it, on purpose.
+describe('runtime detection for the default X-User-Agent', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('reports React Native even when process is also present', async () => {
+    vi.stubGlobal('navigator', { product: 'ReactNative' });
+    vi.stubGlobal('process', { versions: { node: '22.0.0' } });
+
+    const { client, requests } = setup([OK]);
+    await client.getVerification('ver-1');
+
+    expect(only(requests).headers['X-User-Agent']).toBe(
+      `didww-verification-react-native/${CORE_VERSION}`,
+    );
+  });
+
+  it('falls back to the core default when neither React Native nor Node is detected', async () => {
+    vi.stubGlobal('navigator', {});
+    vi.stubGlobal('process', undefined);
+
+    const { client, requests } = setup([OK]);
+    await client.getVerification('ver-1');
+
+    expect(only(requests).headers['X-User-Agent']).toBe(`didww-verification-js/${CORE_VERSION}`);
   });
 });
 

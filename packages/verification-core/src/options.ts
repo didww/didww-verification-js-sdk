@@ -81,6 +81,10 @@ export interface ClientOptions {
   readonly timeoutMs?: number;
   /** GET only, structurally. Default `{ attempts: 2, baseDelayMs: 200 }`. */
   readonly retry?: RetryPolicy;
+  /**
+   * @deprecated Ignored: the SDK identifies itself with its own `X-User-Agent` header. Will be
+   * removed in the next major version.
+   */
   readonly userAgent?: string;
   readonly logger?: (line: string) => void;
   /** Default false. See `Verification.unsafeRawPayload`. */

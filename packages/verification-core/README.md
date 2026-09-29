@@ -53,8 +53,12 @@ absolute URL that overrides it, for a mock or a proxy; a path on it is used as a
 validated at construction, and a `baseUrl` that is not a valid absolute URL throws
 `ConfigurationError`.
 
-Other `ClientOptions`: `transport`, `timeoutMs` (default 30000), `retry`, `userAgent`, `logger`,
-`keepRawPayload`.
+Other `ClientOptions`: `transport`, `timeoutMs` (default 30000), `retry`, `logger`,
+`keepRawPayload`. `userAgent` is deprecated and ignored — see below.
+
+Every request also carries `X-User-Agent: didww-verification-<runtime>/<version>`, detected once
+at construction (React Native, then Node, then plain `didww-verification-js`). If a proxy in front
+of the API strips unrecognized request headers, allow this one through.
 
 ## The methods
 

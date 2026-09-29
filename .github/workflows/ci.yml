@@ -52,6 +52,7 @@ jobs:
       - run: npm run lint
       - run: npm run format:check
       - run: npm run check:package-metadata
+      - run: npm run check:version-constants
       - run: npm run check:no-internal-refs
 
       # Part of "check that it builds": a packaging break is otherwise invisible until publish,
