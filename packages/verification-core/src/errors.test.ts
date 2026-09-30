@@ -7,6 +7,7 @@ import {
   DecodingError,
   DidwwError,
   NotFoundError,
+  RateLimitedError,
   ServerError,
   TransportError,
   UnauthorizedError,
@@ -27,6 +28,7 @@ describe('apiErrorForStatus', () => {
     [402, BalanceInsufficientError],
     [404, NotFoundError],
     [422, ValidationError],
+    [429, RateLimitedError],
     [500, ServerError],
     [503, ServerError],
     [599, ServerError],
@@ -44,6 +46,38 @@ describe('apiErrorForStatus', () => {
     expect(error.code).toBe('validation_failed');
     expect(error.responseBody).toBe(body);
   });
+
+  it('reads `retryAfterSeconds` off the Retry-After header on a 429, case-insensitively', () => {
+    const error = apiErrorForStatus(429, envelope, body, { 'retry-after': '30' });
+    expect(error).toBeInstanceOf(RateLimitedError);
+    expect((error as RateLimitedError).retryAfterSeconds).toBe(30);
+  });
+
+  it('leaves `retryAfterSeconds` null when a 429 carries no Retry-After header', () => {
+    const error = apiErrorForStatus(429, envelope, body);
+    expect((error as RateLimitedError).retryAfterSeconds).toBeNull();
+  });
+
+  it.each([['1.5'], ['-3'], [''], ['0x1e'], ['1e3'], ['Wed, 21 Oct 2026 07:28:00 GMT']])(
+    'rejects a Retry-After of %j rather than coercing it',
+    (value) => {
+      const error = apiErrorForStatus(429, envelope, body, { 'retry-after': value });
+      expect((error as RateLimitedError).retryAfterSeconds).toBeNull();
+    },
+  );
+
+  it('accepts a plain Retry-After of whole seconds', () => {
+    const error = apiErrorForStatus(429, envelope, body, { 'retry-after': '17' });
+    expect((error as RateLimitedError).retryAfterSeconds).toBe(17);
+  });
+
+  it.each([['9007199254740993'], ['999999999999999999999999999999']])(
+    'rejects a Retry-After of %j rather than rounding it to an unsafe integer',
+    (value) => {
+      const error = apiErrorForStatus(429, envelope, body, { 'retry-after': value });
+      expect((error as RateLimitedError).retryAfterSeconds).toBeNull();
+    },
+  );
 });
 
 describe('ApiError', () => {
@@ -89,6 +123,7 @@ describe('the class tree', () => {
     new BalanceInsufficientError(402, envelope, body),
     new NotFoundError(404, envelope, body),
     new ValidationError(422, envelope, body),
+    new RateLimitedError(429, envelope, body, 30),
     new ServerError(500, envelope, body),
   ] as const;
 
@@ -115,6 +150,8 @@ describe('the class tree', () => {
     const cause = new Error('socket hang up');
     expect(new TransportError('x', cause).cause).toBe(cause);
     expect(new TransportError('x').cause).toBeUndefined();
+    expect(new RateLimitedError(429, envelope, body, 30).retryAfterSeconds).toBe(30);
+    expect(new RateLimitedError(429, envelope, body, null).retryAfterSeconds).toBeNull();
   });
 });
 

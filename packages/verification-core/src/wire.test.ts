@@ -16,6 +16,7 @@ const smsCreate: Record<string, unknown> = {
     language: 'de-DE',
     interception_timeout: 120,
     app_hash: 'FA+9qCX9VSu',
+    code_length: 6,
   },
 };
 
@@ -76,22 +77,31 @@ describe('decodeVerificationEnvelope', () => {
         language: 'de-DE',
         interceptionTimeoutSeconds: 120,
         appHash: 'FA+9qCX9VSu',
+        codeLength: 6,
       },
       callout: null,
     });
   });
 
+  it('decodes a present callout code_length', () => {
+    const verification = decodeVerificationEnvelope(
+      body({ ...calloutCreate, callout: { language: 'pt-PT', code_length: 8 } }),
+    );
+
+    expect(verification.callout?.codeLength).toBe(8);
+  });
+
   it('decodes a callout create, callout block included', () => {
     const verification = decodeVerificationEnvelope(body({ ...calloutCreate }));
 
-    expect(verification.callout).toEqual({ language: 'pt-PT' });
+    expect(verification.callout).toEqual({ language: 'pt-PT', codeLength: null });
     expect(verification.sms).toBeNull();
   });
 
   it('decodes a callout block carrying no language to null, the value a legacy row answers with', () => {
     const verification = decodeVerificationEnvelope(body({ ...calloutCreate, callout: {} }));
 
-    expect(verification.callout).toEqual({ language: null });
+    expect(verification.callout).toEqual({ language: null, codeLength: null });
   });
 
   it('decodes an sms block carrying no language to null', () => {
@@ -260,7 +270,15 @@ describe('decodeVerificationEnvelope', () => {
       language: null,
       interceptionTimeoutSeconds: null,
       appHash: null,
+      codeLength: null,
     });
+  });
+
+  it('rejects a non-numeric code_length', () => {
+    const error = decodingErrorFrom(() =>
+      decodeVerificationEnvelope(body({ ...smsCreate, sms: { code_length: '6' } })),
+    );
+    expect(error.message).toContain('code_length');
   });
 
   it('omits `unsafeRawPayload` entirely by default', () => {

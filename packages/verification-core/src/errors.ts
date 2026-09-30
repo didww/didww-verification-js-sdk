@@ -117,6 +117,40 @@ export class ServerError extends ApiError {
   override readonly name = 'ServerError';
 }
 
+/** 429. A start for the same application and destination within the server's cooldown window. */
+export class RateLimitedError extends ApiError {
+  override readonly name = 'RateLimitedError';
+  /** From the `Retry-After` header, whole seconds. Null when the response carried none. */
+  readonly retryAfterSeconds: number | null;
+
+  constructor(
+    status: number,
+    errors: readonly ApiErrorItem[],
+    responseBody: string,
+    retryAfterSeconds: number | null,
+  ) {
+    super(status, errors, responseBody);
+    this.retryAfterSeconds = retryAfterSeconds;
+  }
+}
+
+// Whole non-negative digits only: bare `Number()` also accepts '', ' ', '1.5', '-3', '0x1e' and
+// '1e3', and the header can carry an HTTP-date instead of a delta-seconds value, none of which
+// `Retry-After` from this API is ever specified to send.
+const RETRY_AFTER_SECONDS = /^\d+$/;
+
+function retryAfterSecondsOf(headers: Readonly<Record<string, string>>): number | null {
+  const name = Object.keys(headers).find((key) => key.toLowerCase() === 'retry-after');
+  const value = name === undefined ? undefined : headers[name]?.trim();
+  if (value === undefined || !RETRY_AFTER_SECONDS.test(value)) {
+    return null;
+  }
+  // A digit-only string can still overflow: `Number` rounds a value past MAX_SAFE_INTEGER and
+  // returns `Infinity` past the double range, neither of which is a real delta-seconds value.
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) ? parsed : null;
+}
+
 /**
  * A status this release does not model yields a plain `ApiError` — never a throw and never a
  * neighbouring subclass, so an unforeseen status still reaches the caller with its envelope.
@@ -125,6 +159,7 @@ export function apiErrorForStatus(
   status: number,
   errors: readonly ApiErrorItem[],
   responseBody: string,
+  headers: Readonly<Record<string, string>> = {},
 ): ApiError {
   switch (status) {
     case 400:
@@ -136,6 +171,8 @@ export function apiErrorForStatus(
       return new BalanceInsufficientError(status, errors, responseBody);
     case 404:
       return new NotFoundError(status, errors, responseBody);
+    case 429:
+      return new RateLimitedError(status, errors, responseBody, retryAfterSecondsOf(headers));
     default:
       return status >= 500 && status <= 599
         ? new ServerError(status, errors, responseBody)

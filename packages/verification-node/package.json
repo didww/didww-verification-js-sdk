@@ -1,6 +1,6 @@
 {
   "name": "@didww/verification-node",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Node.js bindings for the DIDWW Verification API: signed application auth and the inbound callback gate.",
   "license": "MIT",
   "repository": {
@@ -33,7 +33,7 @@
     "access": "public"
   },
   "dependencies": {
-    "@didww/verification-core": "^1.0.0"
+    "@didww/verification-core": "^1.1.0"
   },
   "scripts": {
     "build": "tsup",

@@ -6,6 +6,7 @@ import {
   ChannelMismatchError,
   ConfigurationError,
   NotFoundError,
+  RateLimitedError,
   ServerError,
   TransportError,
   UnauthorizedError,
@@ -33,6 +34,7 @@ const PAYLOAD = {
     language: 'en-US',
     interception_timeout: 120,
     app_hash: null,
+    code_length: 6,
   },
 };
 
@@ -701,6 +703,26 @@ describe('retry', () => {
     expect(requests).toHaveLength(1);
   });
 
+  it.each(writeCalls)('never retries %s on a 429 either', async (_name, call) => {
+    const requests: HttpRequest[] = [];
+    const transport: Transport = (request) => {
+      requests.push(request);
+      return Promise.resolve({
+        status: 429,
+        headers: { 'Retry-After': '1' },
+        body: '{"errors":[{"code":"destination_in_cooldown","detail":null}]}',
+      });
+    };
+    const client = new VerificationClient({
+      auth: STATIC_AUTH,
+      transport,
+      retry: { attempts: 10, baseDelayMs: 0 },
+    });
+
+    await expect(call(client)).rejects.toBeInstanceOf(RateLimitedError);
+    expect(requests).toHaveLength(1);
+  });
+
   it('retries a GET twice by default, on the default backoff', async () => {
     vi.useFakeTimers();
     try {
@@ -766,6 +788,7 @@ describe('responses', () => {
         language: 'en-US',
         interceptionTimeoutSeconds: 120,
         appHash: null,
+        codeLength: 6,
       },
       callout: null,
     });
@@ -787,6 +810,7 @@ describe('responses', () => {
     [402, BalanceInsufficientError],
     [404, NotFoundError],
     [422, ValidationError],
+    [429, RateLimitedError],
     [500, ServerError],
   ])('turns %s into its error class, carrying the decoded envelope', async (status, expected) => {
     const body = JSON.stringify({
@@ -812,6 +836,31 @@ describe('responses', () => {
     const failure = await failureOf(client.getVerification('ver-1'));
     expect(failure).toBeInstanceOf(ServerError);
     expect(failure).toMatchObject({ status: 502, code: null, errors: [], responseBody: body });
+  });
+
+  it('reads `Retry-After` off a 429 into `retryAfterSeconds`', async () => {
+    const body = JSON.stringify({
+      errors: [{ code: 'destination_in_cooldown', detail: 'Try again later.' }],
+    });
+    const { client } = setup([{ status: 429, headers: { 'Retry-After': '17' }, body }], {
+      retry: { attempts: 1 },
+    });
+
+    const failure = await failureOf(
+      client.startVerification({ destination: DESTINATION, deliveryMethod: 'sms' }),
+    );
+    expect(failure).toBeInstanceOf(RateLimitedError);
+    expect((failure as RateLimitedError).retryAfterSeconds).toBe(17);
+  });
+
+  it('reads `retryAfterSeconds` as null when a 429 carries no `Retry-After`', async () => {
+    const body = JSON.stringify({ errors: [{ code: 'destination_in_cooldown', detail: null }] });
+    const { client } = setup([{ status: 429, headers: {}, body }], { retry: { attempts: 1 } });
+
+    const failure = await failureOf(
+      client.startVerification({ destination: DESTINATION, deliveryMethod: 'sms' }),
+    );
+    expect((failure as RateLimitedError).retryAfterSeconds).toBeNull();
   });
 });
 

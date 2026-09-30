@@ -218,6 +218,8 @@ therefore reach `expired` without any state change having occurred.
   fail a verification because this ran out.
 - `appHash` — echoed back only when one was stored. Equality with what was sent is the only
   confirmation the server accepted it.
+- `codeLength` — the generated code's length, 4–8, set per application on the server. `callout`
+  carries the same field. Never compile a length into your UI.
 
 `expiresAt` is a `Date` or `null`, decoded from a strict ISO-8601 check rather than bare
 `new Date()`, which reads `"2026"` and `"25 Aug 2026"` as confident wrong instants and rolls
@@ -239,6 +241,7 @@ DidwwError
     ├── UnauthorizedError          401
     ├── BalanceInsufficientError   402
     ├── NotFoundError              404
+    ├── RateLimitedError           429
     └── ServerError                5xx
 ```
 
@@ -287,6 +290,25 @@ try {
 
 `isKnownApiErrorCode` narrows to the closed set so a `switch` over it is exhaustive; codes outside
 it pass through as received rather than being flattened into a fallback.
+
+**429 is `destination_in_cooldown`.** Starting a verification for the same application and
+destination again too soon after a non-denied one is refused, and `RateLimitedError` carries
+`retryAfterSeconds` — a whole number of seconds read off the `Retry-After` header, or `null` when
+the response carried none. `startVerification` is never retried automatically on any status, 429
+included: wait out `retryAfterSeconds` yourself before trying again.
+
+```ts
+import { isApiError, type RateLimitedError } from '@didww/verification-core';
+
+try {
+  await client.startVerification({ destination, deliveryMethod: 'sms' });
+} catch (error) {
+  // Narrow on `status`, not `instanceof RateLimitedError`, for the same cross-copy reason as above.
+  if (isApiError(error) && error.status === 429) {
+    console.log('try again in', (error as RateLimitedError).retryAfterSeconds ?? 'a moment');
+  }
+}
+```
 
 Three outcome codes read oddly on the wire and are worth translating for your users:
 
@@ -360,7 +382,7 @@ const body = JSON.stringify({
     sms: {
       template: 'Your code is {{CODE}}',
       language: 'en-US',
-      interception_timeout: 120,
+      interception_timeout: 300,
       app_hash: null,
     },
   },

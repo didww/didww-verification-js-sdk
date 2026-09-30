@@ -73,10 +73,13 @@ describe('extractCode', () => {
     expect(extractCode(template, 'Code 123456 for ACME')).toBe('123456');
   });
 
-  it.each(['1234', '123456', '1234567890123'])('imposes no code length (%s)', (code) => {
-    const template = 'Your DIDWW code is {{CODE}}.';
-    expect(extractCode(template, render(template, code))).toBe(code);
-  });
+  it.each(['1234', '123456', '12345678', '1234567890123'])(
+    'imposes no code length (%s)',
+    (code) => {
+      const template = 'Your DIDWW code is {{CODE}}.';
+      expect(extractCode(template, render(template, code))).toBe(code);
+    },
+  );
 
   it('returns null for a null template', () => {
     expect(extractCode(null, 'Your DIDWW code is 123456.')).toBeNull();

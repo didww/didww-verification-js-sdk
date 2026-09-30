@@ -47,6 +47,7 @@ const BASE: Omit<Verification, 'unsafeRawPayload'> = {
     language: 'en-US',
     interceptionTimeoutSeconds: 120,
     appHash: 'FA+9qCX9VSu',
+    codeLength: 6,
   },
   callout: null,
 };
@@ -117,7 +118,7 @@ describe('start', () => {
         verification: verification({
           deliveryMethod: 'callout',
           sms: null,
-          callout: { language: 'pt-PT' },
+          callout: { language: 'pt-PT', codeLength: 6 },
         }),
       },
     ]);

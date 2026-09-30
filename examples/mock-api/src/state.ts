@@ -13,9 +13,9 @@ interface WireContract {
   constraints: {
     appHash: { pattern: string };
     languageTag: { acceptedPattern: string; canonicalization: string; fallback: string };
-    generatedCodeLength: number;
-    verificationLifetimeSeconds: number;
-    interceptionTimeoutSeconds: number;
+    generatedCodeLength: { min: number; max: number; default: number };
+    verificationLifetimeSeconds: { min: number; max: number; default: number };
+    interceptionTimeoutSeconds: { min: number; max: number; default: number };
     reportAttempts: { max: number };
   };
   signing: { timestamp: { replayWindowSeconds: number } };
@@ -64,6 +64,7 @@ export const CODE = {
   parameterMissing: member(API_ERROR_CODES, 'API_ERROR_CODES', 'parameter_missing'),
   notFound: member(API_ERROR_CODES, 'API_ERROR_CODES', 'not_found'),
   unauthorized: member(API_ERROR_CODES, 'API_ERROR_CODES', 'unauthorized'),
+  destinationInCooldown: member(API_ERROR_CODES, 'API_ERROR_CODES', 'destination_in_cooldown'),
   internalError: member(API_ERROR_CODES, 'API_ERROR_CODES', 'internal_error'),
   expired: member(API_ERROR_CODES, 'API_ERROR_CODES', 'expired'),
   tooManyAttempts: member(API_ERROR_CODES, 'API_ERROR_CODES', 'too_many_attempts'),
@@ -101,9 +102,10 @@ export function isDeliveryMethod(value: string): boolean {
 export const APP_HASH_PATTERN = new RegExp(contract.constraints.appHash.pattern);
 export const LANGUAGE_TAG_PATTERN = new RegExp(contract.constraints.languageTag.acceptedPattern);
 export const LANGUAGE_TAG_FALLBACK = contract.constraints.languageTag.fallback;
-export const GENERATED_CODE_LENGTH = contract.constraints.generatedCodeLength;
-export const VERIFICATION_LIFETIME_SECONDS = contract.constraints.verificationLifetimeSeconds;
-export const INTERCEPTION_TIMEOUT_SECONDS = contract.constraints.interceptionTimeoutSeconds;
+export const GENERATED_CODE_LENGTH = contract.constraints.generatedCodeLength.default;
+export const VERIFICATION_LIFETIME_SECONDS =
+  contract.constraints.verificationLifetimeSeconds.default;
+export const INTERCEPTION_TIMEOUT_SECONDS = contract.constraints.interceptionTimeoutSeconds.default;
 export const MAX_REPORT_ATTEMPTS = contract.constraints.reportAttempts.max;
 export const REPLAY_WINDOW_SECONDS = contract.signing.timestamp.replayWindowSeconds;
 export const CALLBACK_READ_LIMIT_BYTES = contract.callback.expectedResponse.responseReadLimitBytes;
@@ -134,6 +136,7 @@ const ERROR_DETAILS: Record<string, string> = {
   [CODE.parameterMissing]: 'A required parameter is missing.',
   [CODE.notFound]: 'Resource not found.',
   [CODE.unauthorized]: 'Unauthorized.',
+  [CODE.destinationInCooldown]: 'verification for this destination was requested too recently',
   [CODE.internalError]: 'Internal error.',
   [CODE.expired]: 'Verification has expired.',
   [CODE.tooManyAttempts]: 'Too many report attempts.',
@@ -174,6 +177,10 @@ export interface VerificationRow {
   createdAt: number;
   expiresAt: number;
   sequence: number;
+  /** The lifetime and code length this row was created with — a mock instance's settings can
+   *  differ from the contract defaults, so render must read these back rather than the defaults. */
+  lifetimeSeconds: number;
+  codeLength: number;
 }
 
 export const SMS_TEMPLATES: Record<string, string> = {
@@ -275,6 +282,8 @@ export class MockState {
       createdAt: at,
       expiresAt: at + this.settings.lifetimeSeconds * 1000,
       sequence: this.sequence,
+      lifetimeSeconds: this.settings.lifetimeSeconds,
+      codeLength: this.settings.code.length,
     };
     this.rows.set(row.id, row);
     return row;
@@ -290,6 +299,28 @@ export class MockState {
     let newest: VerificationRow | undefined;
     for (const row of this.rows.values()) {
       if (row.applicationKey !== applicationKey || row.destination !== destination) continue;
+      if (newest === undefined || row.sequence > newest.sequence) newest = row;
+    }
+    return newest;
+  }
+
+  /**
+   * The newest row for (applicationKey, destination) that is both non-denied and created within
+   * `windowMs` of `at` — every such row is a candidate, not just the overall newest one, because a
+   * denied row never starts the cooldown (mirroring `supersede`, which a denied row never triggers
+   * either) and could otherwise sit on top of an older row that is still within its own window.
+   */
+  newestNonDeniedWithin(
+    applicationKey: string,
+    destination: string,
+    windowMs: number,
+    at: number,
+  ): VerificationRow | undefined {
+    let newest: VerificationRow | undefined;
+    for (const row of this.rows.values()) {
+      if (row.applicationKey !== applicationKey || row.destination !== destination) continue;
+      if (row.status === STATUS.denied) continue;
+      if (at - row.createdAt >= windowMs) continue;
       if (newest === undefined || row.sequence > newest.sequence) newest = row;
     }
     return newest;
@@ -344,14 +375,15 @@ export function renderVerification(row: VerificationRow, at: number): Record<str
     const sms: Record<string, unknown> = {
       template: row.template,
       language: row.language,
-      interception_timeout: INTERCEPTION_TIMEOUT_SECONDS,
+      interception_timeout: row.lifetimeSeconds,
+      code_length: row.codeLength,
     };
     // The key is omitted entirely unless a hash was stored on this verification.
     if (row.appHash !== null) sms.app_hash = row.appHash;
     body.sms = sms;
   }
   if (row.deliveryMethod === METHOD.callout) {
-    body.callout = { language: row.language };
+    body.callout = { language: row.language, code_length: row.codeLength };
   }
   return body;
 }

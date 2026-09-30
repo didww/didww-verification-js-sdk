@@ -19,10 +19,11 @@ guesses, and every guess is listed under [Where this is a guess](#where-this-is-
 npm start --prefix examples/mock-api          # PORT=4000 by default
 PORT=8080 npm start --prefix examples/mock-api
 CALLBACK_BASE_URL=http://127.0.0.1:9000 npm start --prefix examples/mock-api
+COOLDOWN_SECONDS=0 npm start --prefix examples/mock-api   # 30 by default; 0 disables it
 ```
 
-`CALLBACK_BASE_URL` is the origin the seeded applications register their callback URLs under. In
-process, for tests:
+`CALLBACK_BASE_URL` is the origin the seeded applications register their callback URLs under.
+`COOLDOWN_SECONDS` controls the destination cooldown below. In process, for tests:
 
 ```ts
 import { createMockApi } from './examples/mock-api/src/server.ts';
@@ -32,8 +33,8 @@ const api = await createMockApi({ port: 0, callbackBaseUrl: receiver.origin }).l
 await api.close();
 ```
 
-`createMockApi` also takes `applications`, `code`, `cli`, `fee`, `verificationLifetimeSeconds` and
-`callbackTimeoutMs`. Passing `applications` replaces the seeded set entirely.
+`createMockApi` also takes `applications`, `code`, `cli`, `fee`, `verificationLifetimeSeconds`,
+`callbackTimeoutMs` and `cooldownSeconds`. Passing `applications` replaces the seeded set entirely.
 
 ## Routes
 
@@ -161,6 +162,12 @@ client can report the right value without reading a message.
 - **`app_hash`** is validated on every start once supplied; a malformed one fails the whole
   verification with `app_hash_invalid`, and the key is omitted from the response unless a hash was
   stored.
+- **Destination cooldown.** Starting a verification for the same application and destination again
+  within `cooldownSeconds` (30 by default, `COOLDOWN_SECONDS` or the `cooldownSeconds` option; `0`
+  disables it) of a non-denied one is refused with `429` and `destination_in_cooldown`, and carries
+  a `Retry-After` header — whole seconds, at least 1. A denied start does not start the cooldown,
+  the same way it does not supersede. Off by default in the proof suite and the end-to-end test,
+  both of which start several verifications for the same destination on purpose.
 
 The vocabulary — statuses, delivery methods, error codes — is read from
 `@didww/verification-core`, and every slug this server emits is resolved against it at module load,
