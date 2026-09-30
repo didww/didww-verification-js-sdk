@@ -1,5 +1,5 @@
 {
-  "capturedAt": "2026-08-31",
+  "capturedAt": "2026-09-28",
   "baseUrls": {
     "production": "https://verification.didww.com",
     "sandbox": "https://verification-sandbox.didww.com"
@@ -16,6 +16,7 @@
         401,
         402,
         422,
+        429,
         500
       ]
     },
@@ -163,6 +164,12 @@
             "nullable": false,
             "alwaysPresent": false,
             "notes": "The key is omitted entirely unless a hash was stored on this verification. Equality with what was sent is the only confirmation that it was accepted."
+          },
+          "code_length": {
+            "type": "integer",
+            "nullable": false,
+            "alwaysPresent": true,
+            "notes": "The generated code's length, 4-8, set per application. Never compile a length into the client — see constraints.generatedCodeLength."
           }
         }
       },
@@ -176,6 +183,12 @@
             "nullable": true,
             "alwaysPresent": true,
             "notes": "The tag the announcement is played in: the first requested tag with a recording, else the fallback. Nullable for the same reason as sms.language."
+          },
+          "code_length": {
+            "type": "integer",
+            "nullable": false,
+            "alwaysPresent": true,
+            "notes": "Same fact as sms.code_length, for the callout channel."
           }
         }
       }
@@ -268,9 +281,24 @@
       "fallback": "en-US",
       "notes": "Validation accepts a bare primary subtag, but a catalogue is matched on the exact canonical tag, so 'pl' passes validation and then silently falls back to en-US. Send the region subtag. Tags are tried in order; the first that matches wins. Each channel resolves against its own catalogue — the set with an SMS template is not the set with an announcement recording — so one tag list can resolve differently per channel, and the response names which tag was used."
     },
-    "generatedCodeLength": 6,
-    "verificationLifetimeSeconds": 120,
-    "interceptionTimeoutSeconds": 120,
+    "generatedCodeLength": {
+      "min": 4,
+      "max": 8,
+      "default": 6,
+      "notes": "A server fact, set per application. Never compile a length into the client."
+    },
+    "verificationLifetimeSeconds": {
+      "min": 60,
+      "max": 600,
+      "default": 300,
+      "notes": "Per application. expires_at is the creation time plus this lifetime."
+    },
+    "interceptionTimeoutSeconds": {
+      "min": 60,
+      "max": 600,
+      "default": 300,
+      "notes": "Equal to the application's verification lifetime; sms.interception_timeout carries the value actually used."
+    },
     "reportAttempts": {
       "max": 3,
       "notes": "The report that exceeds the limit answers 200 with status 'failed' and error_code 'too_many_attempts' — not a 4xx. Whether another attempt is allowed is the server's decision; do not count attempts locally."

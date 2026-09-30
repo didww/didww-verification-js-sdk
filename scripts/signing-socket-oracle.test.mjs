@@ -46,7 +46,9 @@ function contentMd5(body) {
 }
 
 beforeAll(async () => {
-  api = createMockApi({ port: 0 });
+  // Off: several checks below start the same destination again on purpose, to isolate the signing
+  // invariant under test rather than the cooldown.
+  api = createMockApi({ port: 0, cooldownSeconds: 0 });
   await api.listen();
   client = new VerificationClient({
     baseUrl: api.url,

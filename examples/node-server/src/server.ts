@@ -106,7 +106,10 @@ function view(verification: Verification): Record<string, unknown> {
     sms:
       verification.sms === null
         ? null
-        : { interception_timeout: verification.sms.interceptionTimeoutSeconds },
+        : {
+            interception_timeout: verification.sms.interceptionTimeoutSeconds,
+            code_length: verification.sms.codeLength,
+          },
   };
 }
 

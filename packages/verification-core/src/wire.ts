@@ -119,11 +119,15 @@ function decodeSms(source: Record<string, unknown>, body: string): SmsInfo {
     language: nullableString(source, 'language', body),
     interceptionTimeoutSeconds: nullableNumber(source, 'interception_timeout', body),
     appHash: nullableString(source, 'app_hash', body),
+    codeLength: nullableNumber(source, 'code_length', body),
   };
 }
 
 function decodeCallout(source: Record<string, unknown>, body: string): CalloutInfo {
-  return { language: nullableString(source, 'language', body) };
+  return {
+    language: nullableString(source, 'language', body),
+    codeLength: nullableNumber(source, 'code_length', body),
+  };
 }
 
 /** Decodes a verification response body. Throws `DecodingError` on a malformed one. */

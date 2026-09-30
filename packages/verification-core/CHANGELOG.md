@@ -5,6 +5,21 @@ Notable changes to `@didww/verification-core`.
 This package follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Two names are excluded from semver and may change in any release:
 `Verification.unsafeRawPayload` and `INTERNAL_APP_HASH_KEY`.
 
+## 1.1.0 — 2026-10
+
+- `SmsInfo.codeLength` and `CalloutInfo.codeLength` — the generated code's length, 4–8, set per
+  application on the server. **Both fields are required by the type**, not optional: an object
+  literal typed `SmsInfo`, `CalloutInfo` or `Verification` — a test mock, most likely — now needs
+  `codeLength` added or it stops compiling.
+- `'destination_in_cooldown'` in `API_ERROR_CODES` — a start for the same application and
+  destination too soon after a non-denied one is refused with it.
+- `RateLimitedError` — thrown for a 429, carrying `retryAfterSeconds` read off the `Retry-After`
+  header (`null` when the response carried none). `startVerification` is never retried
+  automatically on any status, 429 included.
+- The optional logger's redaction now masks every run of four or more digits outside a UUID,
+  rather than six or more: the generated code is 4–8 digits, chosen by the server, and a shorter
+  run would leak it. Ports and years are masked along with it; a verification id stays readable.
+
 ## 1.0.0 — 2026-09
 
 First release.

@@ -257,7 +257,14 @@ async function main(): Promise<void> {
     callbackUrl: fixture.path === null ? null : `${receiver.origin}${fixture.path}`,
   }));
 
-  const api = await createMockApi({ applications, callbackTimeoutMs: 2_000 }).listen();
+  // Off here: several sections below start back-to-back verifications for the same destination on
+  // purpose (supersession), which the cooldown would otherwise turn into a 429. It gets its own
+  // section, on its own short-lived instance, further down.
+  const api = await createMockApi({
+    applications,
+    callbackTimeoutMs: 2_000,
+    cooldownSeconds: 0,
+  }).listen();
   const base = api.url;
   const code = api.state.verificationCode;
 
@@ -284,6 +291,7 @@ async function main(): Promise<void> {
     );
     equals('sms.language names the tag that matched', sms?.language, 'de-DE');
     check('interception_timeout is an integer', Number.isInteger(sms?.interception_timeout));
+    equals('sms.code_length is the generated code length', sms?.code_length, code.length);
     check('app_hash key omitted when none was sent', sms !== undefined && !('app_hash' in sms));
 
     const id = String(startedData.id);
@@ -625,6 +633,11 @@ async function main(): Promise<void> {
       body: startBody(codeNumber, 'callout'),
     });
     check('a callout start returns no sms block', dataOf(codeStart).sms === undefined);
+    equals(
+      'callout.code_length is the generated code length too',
+      (dataOf(codeStart).callout as Record<string, unknown> | undefined)?.code_length,
+      code.length,
+    );
     const codeTarget = `/api/v1/verifications/${String(dataOf(codeStart).id)}`;
     const wrongField = await request(base, 'PUT', codeTarget, {
       headers: { ...basicHeader(fx('key_basic')), 'content-type': JSON_TYPE },
@@ -647,6 +660,49 @@ async function main(): Promise<void> {
     equals('a channel the SDK does not model is refused at start', errorCodesOf(unmodelled), [
       'delivery_method_inclusion',
     ]);
+
+    section(
+      'state — a custom code length and lifetime render on the row, not the contract defaults',
+    );
+    const customCode = '12345678';
+    const custom = await createMockApi({
+      applications,
+      code: customCode,
+      verificationLifetimeSeconds: 120,
+      callbackTimeoutMs: 2_000,
+      cooldownSeconds: 0,
+    }).listen();
+    try {
+      const customSms = await request(custom.url, 'POST', '/api/v1/verifications', {
+        headers: { ...basicHeader(fx('key_basic')), 'content-type': JSON_TYPE },
+        body: startBody(nextDestination(), 'sms'),
+      });
+      const customSmsBlock = dataOf(customSms).sms as Record<string, unknown> | undefined;
+      equals(
+        'sms.code_length reflects the configured code, not the contract default',
+        customSmsBlock?.code_length,
+        customCode.length,
+      );
+      equals(
+        'sms.interception_timeout reflects the configured lifetime, not the contract default',
+        customSmsBlock?.interception_timeout,
+        120,
+      );
+
+      const customCallout = await request(custom.url, 'POST', '/api/v1/verifications', {
+        headers: { ...basicHeader(fx('key_basic')), 'content-type': JSON_TYPE },
+        body: startBody(nextDestination(), 'callout'),
+      });
+      const customCalloutBlock = dataOf(customCallout).callout as
+        Record<string, unknown> | undefined;
+      equals(
+        'callout.code_length reflects the configured code too',
+        customCalloutBlock?.code_length,
+        customCode.length,
+      );
+    } finally {
+      await custom.close();
+    }
 
     section('validation');
     const noData = await request(base, 'POST', '/api/v1/verifications', {
@@ -712,6 +768,65 @@ async function main(): Promise<void> {
       equals('with error_code expired', dataOf(expired).error_code, 'expired');
     } finally {
       await shortLived.close();
+    }
+
+    section('state — destination cooldown (429)');
+    // Its own instance, with the cooldown turned back on and shortened so the check runs fast.
+    const cooling = await createMockApi({
+      applications,
+      cooldownSeconds: 1,
+      callbackTimeoutMs: 2_000,
+    }).listen();
+    try {
+      const coolingNumber = nextDestination();
+      const coolingStart = (): Promise<Reply> =>
+        request(cooling.url, 'POST', '/api/v1/verifications', {
+          headers: { ...basicHeader(fx('key_basic')), 'content-type': JSON_TYPE },
+          body: startBody(coolingNumber, 'sms'),
+        });
+
+      const first = await coolingStart();
+      check('the first start succeeds', first.status === 201, first.text);
+
+      const second = await coolingStart();
+      check('a repeat start within the window is a 429', second.status === 429, second.text);
+      equals('with destination_in_cooldown', errorCodesOf(second), ['destination_in_cooldown']);
+      check(
+        'Retry-After is a whole number of seconds, at least 1',
+        /^[1-9][0-9]*$/.test(String(second.headers['retry-after'])),
+        JSON.stringify(second.headers['retry-after']),
+      );
+
+      await sleep(1_100);
+      const third = await coolingStart();
+      check('a start past the window succeeds again', third.status === 201, third.text);
+
+      // Real network round trips to the receiver, not `key_basic`'s callback-less path, so the two
+      // requests actually overlap while each awaits its own callback — the race the per-destination
+      // reservation exists to close.
+      const raceNumber = nextDestination();
+      const raceStart = (): Promise<Reply> =>
+        request(cooling.url, 'POST', '/api/v1/verifications', {
+          headers: { ...publicHeader(fx('key_public_allow')), 'content-type': JSON_TYPE },
+          body: startBody(raceNumber, 'sms'),
+        });
+      const [raceA, raceB] = await Promise.all([raceStart(), raceStart()]);
+      equals(
+        'two concurrent starts for the same destination: exactly one succeeds',
+        [raceA.status, raceB.status].sort(),
+        [201, 429],
+      );
+      const raceLoser = raceA.status === 429 ? raceA : raceB;
+      equals('the loser is destination_in_cooldown', errorCodesOf(raceLoser), [
+        'destination_in_cooldown',
+      ]);
+      check(
+        "the loser's Retry-After is a whole number of seconds, at least 1",
+        /^[1-9][0-9]*$/.test(String(raceLoser.headers['retry-after'])),
+        JSON.stringify(raceLoser.headers['retry-after']),
+      );
+    } finally {
+      await cooling.close();
     }
   } finally {
     await api.close();

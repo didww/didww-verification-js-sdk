@@ -252,7 +252,12 @@ export class VerificationClient {
     this.#log(request, response.status);
 
     if (response.status < 200 || response.status >= 300) {
-      throw apiErrorForStatus(response.status, decodeErrorItems(response.body), response.body);
+      throw apiErrorForStatus(
+        response.status,
+        decodeErrorItems(response.body),
+        response.body,
+        response.headers,
+      );
     }
     return decodeVerificationEnvelope(response.body, { keepRawPayload: this.#keepRawPayload });
   }

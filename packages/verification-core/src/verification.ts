@@ -14,6 +14,11 @@ export interface SmsInfo {
   readonly interceptionTimeoutSeconds: number | null;
   /** Echoed only when one was stored. Equality with what you sent is the arming signal. */
   readonly appHash: string | null;
+  /**
+   * The generated code's length, 4–8, set per application on the server. Never compile a length
+   * into the client.
+   */
+  readonly codeLength: number | null;
 }
 
 export interface CalloutInfo {
@@ -23,6 +28,8 @@ export interface CalloutInfo {
    * can still fall back here. Null on a verification stored before the server recorded one.
    */
   readonly language: string | null;
+  /** {@link SmsInfo.codeLength}. */
+  readonly codeLength: number | null;
 }
 
 export interface Verification {

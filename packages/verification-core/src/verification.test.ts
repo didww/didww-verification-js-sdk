@@ -16,6 +16,7 @@ function verification(overrides: Partial<Verification> = {}): Verification {
       language: 'en-US',
       interceptionTimeoutSeconds: 120,
       appHash: null,
+      codeLength: 6,
     },
     callout: null,
     ...overrides,
