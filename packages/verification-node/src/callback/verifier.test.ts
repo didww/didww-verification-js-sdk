@@ -88,6 +88,7 @@ describe('CallbackVerifier accepting a callback', () => {
           id: '01920a7b-0000-7000-8000-000000000001',
           destination: '12025550143',
           deliveryMethod: 'sms',
+          custom: null,
         },
       },
     });
@@ -271,7 +272,7 @@ describe('CallbackVerifier path handling', () => {
 });
 
 describe('CallbackVerifier body cap', () => {
-  const oversized = `{"pad":"${'a'.repeat(8192)}"}`;
+  const oversized = `{"pad":"${'a'.repeat(32768)}"}`;
 
   it('reports an oversized unsigned body as too large, before anything else', async () => {
     // Both oversized and unsigned: the reason proves size is checked first.
@@ -294,8 +295,8 @@ describe('CallbackVerifier body cap', () => {
   });
 
   it('measures the cap in bytes, not characters', async () => {
-    // 4096 characters, 12288 bytes: a character count would wave this straight through.
-    const multibyte = '€'.repeat(4096);
+    // 12288 characters, 36864 bytes: a character count would wave this straight through.
+    const multibyte = '€'.repeat(12288);
 
     const result = await fixed.verify(signed({ body: multibyte }));
 
@@ -303,13 +304,22 @@ describe('CallbackVerifier body cap', () => {
   });
 
   it('admits a body of exactly the cap', async () => {
-    const exact = `"${'a'.repeat(8190)}"`;
-    expect(Buffer.byteLength(exact, 'utf8')).toBe(8192);
+    const exact = `"${'a'.repeat(32766)}"`;
+    expect(Buffer.byteLength(exact, 'utf8')).toBe(32768);
 
     // It clears the size check, and it is correctly signed, so the reason comes from the last one.
     const result = await fixed.verify(signed({ body: exact }));
 
     expect(result).toEqual({ ok: false, reason: 'unparseable_body', key: KEY });
+  });
+
+  it('admits the largest body the server sends: a 4096-character custom, fully escaped', async () => {
+    // The server escapes <, > and & as <-style sequences, six bytes per character.
+    const largest = BODY.replace('"sms"}', `"sms","custom":"${'\\u003c'.repeat(4096)}"}`);
+
+    const result = await fixed.verify(signed({ body: largest }));
+
+    expect(result.ok && result.payload.data.custom).toBe('<'.repeat(4096));
   });
 
   it('honours a configured cap', async () => {
@@ -350,7 +360,7 @@ describe('CallbackVerifier check order', () => {
   });
 
   it('reports an oversized body with no timestamp as too large', async () => {
-    const result = await fixed.verify({ ...signed({ body: 'x'.repeat(9000) }), timestamp: null });
+    const result = await fixed.verify({ ...signed({ body: 'x'.repeat(33000) }), timestamp: null });
 
     expect(result).toEqual({ ok: false, reason: 'body_too_large', key: KEY });
   });

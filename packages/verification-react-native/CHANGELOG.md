@@ -4,6 +4,13 @@ Notable changes to `@didww/verification-react-native`.
 
 This package follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 1.2.0
+
+Unreleased.
+
+- `StartInput.custom` — passed through to `startVerification` and forwarded to the callback server as
+  `data.custom`. The value is set on the device, so treat it as untrusted there.
+
 ## 1.1.0 — 2026-10
 
 - Kept in step with `@didww/verification-core` 1.1.0 (`SmsInfo.codeLength`/`CalloutInfo.codeLength`,

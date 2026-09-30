@@ -36,7 +36,7 @@ const BODY = JSON.stringify({
 const EXPECTED_PAYLOAD = {
   event: 'verification_request',
   key: KEY,
-  data: { id: VERIFICATION_ID, destination: DESTINATION, deliveryMethod: 'sms' },
+  data: { id: VERIFICATION_ID, destination: DESTINATION, deliveryMethod: 'sms', custom: null },
 };
 
 const applications = new Map([
@@ -318,7 +318,7 @@ describe('expressCallbackHandler rejections', () => {
     data: {
       id: VERIFICATION_ID,
       destination: DESTINATION,
-      delivery_method: 'sms'.padEnd(9000, '!'),
+      delivery_method: 'sms'.padEnd(33000, '!'),
     },
   });
 

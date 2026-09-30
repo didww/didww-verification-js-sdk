@@ -5,6 +5,14 @@ Notable changes to `@didww/verification-core`.
 This package follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Two names are excluded from semver and may change in any release:
 `Verification.unsafeRawPayload` and `INTERNAL_APP_HASH_KEY`.
 
+## 1.2.0
+
+Unreleased.
+
+- `StartOptions.custom` — up to 4096 characters of text, sent as the top-level `custom` key and
+  forwarded unchanged to the callback server as `data.custom`. It is not returned on the verification.
+- `'custom_too_long'` in `API_ERROR_CODES` — the start is refused with it when `custom` is too long.
+
 ## 1.1.0 — 2026-10
 
 - `SmsInfo.codeLength` and `CalloutInfo.codeLength` — the generated code's length, 4–8, set per

@@ -4,6 +4,16 @@ Notable changes to `@didww/verification-node`.
 
 This package follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 1.2.0
+
+Unreleased.
+
+- `CallbackPayload.data.custom` — the `custom` text given at start, or `null` when none was sent (the
+  server omits the key then). **The field is required by the type**, so an object literal typed
+  `CallbackPayload` — a test fixture, most likely — now needs `custom` added.
+- `DEFAULT_MAX_BODY_BYTES` raised from 8 KiB to 32 KiB. A 4096-character `custom` in non-Latin text,
+  or with characters the server escapes, makes a legitimate request body larger than 8 KiB.
+
 ## 1.1.0 — 2026-10
 
 - Kept in step with `@didww/verification-core` 1.1.0 (`SmsInfo.codeLength`/`CalloutInfo.codeLength`,

@@ -42,6 +42,13 @@ describe('ApiErrorCode', () => {
   });
 });
 
+describe('API_ERROR_CODES', () => {
+  it('lists custom_too_long', () => {
+    expect(API_ERROR_CODES).toContain('custom_too_long');
+    expect(isKnownApiErrorCode('custom_too_long')).toBe(true);
+  });
+});
+
 describe('isKnownApiErrorCode', () => {
   it.each([...API_ERROR_CODES])('is true for %s', (code) => {
     expect(isKnownApiErrorCode(code)).toBe(true);

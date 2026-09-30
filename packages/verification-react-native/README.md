@@ -323,6 +323,17 @@ release, which is the field it will almost certainly want. A channel that expect
 is not reportable through the hook: call `client.reportVerificationRaw(id, { deliveryMethod, cli })`
 yourself, where the field is yours to pick and only the server judges the pairing.
 
+## Custom data
+
+```ts
+controller.start({ destination, deliveryMethod: 'sms', custom: 'order-42' });
+```
+
+`custom` (up to 4096 characters) is forwarded to your callback server as `data.custom`. **It is
+set by the app on the device, so anyone who controls the device controls the value.** Treat it as
+untrusted input in the callback: validate it against your own records, and never let it alone
+authorise anything.
+
 ## Language
 
 Both `sms` and `callout` take a preference list, in a block named after the channel:

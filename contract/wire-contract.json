@@ -207,6 +207,11 @@
           "required": true,
           "enum": "DELIVERY_METHODS"
         },
+        "custom": {
+          "type": "string",
+          "required": false,
+          "notes": "Arbitrary text of at most constraints.custom.maxLength characters, forwarded unchanged in the verification_request callback as data.custom. An empty string is treated as absent. A number or boolean is taken as its text; an object or array is dropped, not rejected. Never returned by create, get or report."
+        },
         "sms": {
           "type": "object",
           "required": false,
@@ -270,6 +275,10 @@
       "pattern": "^[A-Za-z0-9+/]{11}$",
       "length": 11,
       "notes": "Validated on every start once supplied; a malformed hash fails the whole request with app_hash_invalid (422) rather than being ignored."
+    },
+    "custom": {
+      "maxLength": 4096,
+      "notes": "Counted in characters. Longer fails the whole request with custom_too_long (422)."
     },
     "codePlaceholder": {
       "token": "{{CODE}}",
@@ -393,7 +402,8 @@
         "data": {
           "id": "<verification id>",
           "destination": "<digits only>",
-          "delivery_method": "<sms | callout>"
+          "delivery_method": "<sms | callout>",
+          "custom": "<the start request's custom text; key absent when none was sent>"
         }
       },
       "retries": 0

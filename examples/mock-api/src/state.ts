@@ -12,6 +12,7 @@ interface WireContract {
   paths: Record<string, unknown>;
   constraints: {
     appHash: { pattern: string };
+    custom: { maxLength: number };
     languageTag: { acceptedPattern: string; canonicalization: string; fallback: string };
     generatedCodeLength: { min: number; max: number; default: number };
     verificationLifetimeSeconds: { min: number; max: number; default: number };
@@ -53,6 +54,7 @@ export const CODE = {
   deliveryMethodInvalid: member(API_ERROR_CODES, 'API_ERROR_CODES', 'delivery_method_invalid'),
   languagesInvalid: member(API_ERROR_CODES, 'API_ERROR_CODES', 'languages_invalid'),
   appHashInvalid: member(API_ERROR_CODES, 'API_ERROR_CODES', 'app_hash_invalid'),
+  customTooLong: member(API_ERROR_CODES, 'API_ERROR_CODES', 'custom_too_long'),
   codeBlank: member(API_ERROR_CODES, 'API_ERROR_CODES', 'code_blank'),
   codeValuePresent: member(API_ERROR_CODES, 'API_ERROR_CODES', 'code_value_present'),
   cliBlank: member(API_ERROR_CODES, 'API_ERROR_CODES', 'cli_blank'),
@@ -100,6 +102,7 @@ export function isDeliveryMethod(value: string): boolean {
 }
 
 export const APP_HASH_PATTERN = new RegExp(contract.constraints.appHash.pattern);
+export const CUSTOM_MAX_LENGTH = contract.constraints.custom.maxLength;
 export const LANGUAGE_TAG_PATTERN = new RegExp(contract.constraints.languageTag.acceptedPattern);
 export const LANGUAGE_TAG_FALLBACK = contract.constraints.languageTag.fallback;
 export const GENERATED_CODE_LENGTH = contract.constraints.generatedCodeLength.default;
@@ -125,6 +128,7 @@ const ERROR_DETAILS: Record<string, string> = {
   [CODE.deliveryMethodInvalid]: 'Delivery method does not match the verification.',
   [CODE.languagesInvalid]: 'Languages are not valid language tags.',
   [CODE.appHashInvalid]: 'App hash is not a valid application hash.',
+  [CODE.customTooLong]: 'Custom is too long.',
   [CODE.codeBlank]: 'Code is required.',
   [CODE.codeValuePresent]: 'Code must not be sent for this delivery method.',
   [CODE.cliBlank]: 'CLI is required.',

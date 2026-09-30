@@ -1022,6 +1022,23 @@ describe('useVerification: SMS auto-capture', () => {
     });
   });
 
+  it('sends custom in the start body', async () => {
+    nativeState.module = fakeNative().module;
+    const { transport, requests } = fakeTransport([ok(verificationBody())]);
+    const box: Box = { controller: null };
+
+    render(
+      <Host
+        client={clientFor(transport)}
+        box={box}
+        startOnMount={{ ...SMS_START, custom: 'order-42' }}
+      />,
+    );
+    await flush();
+
+    expect(decodedBody(requestAt(requests, 0))).toMatchObject({ data: { custom: 'order-42' } });
+  });
+
   it('starts the verification anyway when the device has no app hash', async () => {
     const native = fakeNative(() => Promise.reject(new Error('no module')));
     nativeState.module = native.module;

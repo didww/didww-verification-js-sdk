@@ -33,6 +33,7 @@ export const API_ERROR_CODES = [
   'delivery_method_invalid',
   'languages_invalid',
   'app_hash_invalid',
+  'custom_too_long',
   'code_blank',
   'code_value_present',
   'cli_blank',

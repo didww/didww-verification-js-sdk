@@ -20,6 +20,11 @@ export interface StartInput {
   readonly deliveryMethod: DeliveryMethod;
   readonly sms?: SmsOptions;
   readonly callout?: CalloutOptions;
+  /**
+   * Text forwarded to your callback server as `data.custom`. It is set by the app on the device,
+   * so the callback must treat it as untrusted.
+   */
+  readonly custom?: string;
 }
 
 export interface ResumeInput {
@@ -298,6 +303,7 @@ function createRuntime(
           deliveryMethod: input.deliveryMethod,
           ...smsOptionsFor(input, appHash),
           ...(input.callout === undefined ? {} : { callout: input.callout }),
+          ...(input.custom === undefined ? {} : { custom: input.custom }),
           signal,
         }),
       );
