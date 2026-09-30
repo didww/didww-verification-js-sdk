@@ -52,6 +52,7 @@ export const CODE = {
   deliveryMethodInclusion: member(API_ERROR_CODES, 'API_ERROR_CODES', 'delivery_method_inclusion'),
   deliveryMethodInvalid: member(API_ERROR_CODES, 'API_ERROR_CODES', 'delivery_method_invalid'),
   languagesInvalid: member(API_ERROR_CODES, 'API_ERROR_CODES', 'languages_invalid'),
+  autofillInvalid: member(API_ERROR_CODES, 'API_ERROR_CODES', 'autofill_invalid'),
   appHashInvalid: member(API_ERROR_CODES, 'API_ERROR_CODES', 'app_hash_invalid'),
   codeBlank: member(API_ERROR_CODES, 'API_ERROR_CODES', 'code_blank'),
   codeValuePresent: member(API_ERROR_CODES, 'API_ERROR_CODES', 'code_value_present'),
@@ -124,6 +125,7 @@ const ERROR_DETAILS: Record<string, string> = {
   [CODE.deliveryMethodInclusion]: 'Delivery method is not supported.',
   [CODE.deliveryMethodInvalid]: 'Delivery method does not match the verification.',
   [CODE.languagesInvalid]: 'Languages are not valid language tags.',
+  [CODE.autofillInvalid]: 'Autofill is not a valid autofill marker.',
   [CODE.appHashInvalid]: 'App hash is not a valid application hash.',
   [CODE.codeBlank]: 'Code is required.',
   [CODE.codeValuePresent]: 'Code must not be sent for this delivery method.',
@@ -379,7 +381,7 @@ export function renderVerification(row: VerificationRow, at: number): Record<str
       code_length: row.codeLength,
     };
     // The key is omitted entirely unless a hash was stored on this verification.
-    if (row.appHash !== null) sms.app_hash = row.appHash;
+    if (row.appHash !== null) sms.autofill = { type: 'app_hash', value: row.appHash };
     body.sms = sms;
   }
   if (row.deliveryMethod === METHOD.callout) {

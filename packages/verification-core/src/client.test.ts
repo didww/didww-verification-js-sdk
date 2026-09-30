@@ -32,7 +32,6 @@ const PAYLOAD = {
     template: 'Your code is {code}',
     language: 'en-US',
     interception_timeout: 120,
-    app_hash: null,
     code_length: 6,
   },
 };
@@ -451,7 +450,7 @@ describe('the app-hash gate', () => {
     expect(requests).toEqual([]);
   });
 
-  it('emits a well-formed hash as app_hash and never leaks the internal key', async () => {
+  it('emits a well-formed hash as an app_hash autofill and never leaks the internal key', async () => {
     const { client, requests } = setup([CREATED]);
     const sms: InternalSmsOptions = {
       languages: ['en-US', 'de-DE'],
@@ -463,8 +462,9 @@ describe('the app-hash gate', () => {
     const request = only(requests);
     expect(request.body).toBe(
       '{"data":{"destination":"+4915112345678","delivery_method":"sms",' +
-        '"sms":{"languages":["en-US","de-DE"],"app_hash":"abcdEFGH+/1"}}}',
+        '"sms":{"languages":["en-US","de-DE"],"autofill":{"type":"app_hash","value":"abcdEFGH+/1"}}}}',
     );
+    expect(request.body).not.toContain('"app_hash":');
     expect(request.body).not.toContain(INTERNAL_APP_HASH_KEY);
     expect(request.body).not.toContain('appHash');
   });
@@ -723,6 +723,7 @@ describe('responses', () => {
         template: 'Your code is {code}',
         language: 'en-US',
         interceptionTimeoutSeconds: 120,
+        autofill: null,
         appHash: null,
         codeLength: 6,
       },

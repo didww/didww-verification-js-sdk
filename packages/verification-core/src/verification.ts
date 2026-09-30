@@ -1,6 +1,16 @@
 import type { DeliveryMethod } from './delivery-method.js';
 import type { VerificationErrorCode, VerificationStatus } from './error-codes.js';
 
+/**
+ * The marker the server framed the SMS with, so the device can read the message automatically.
+ * Discriminated on `type`: a marker added later becomes another member of the union.
+ */
+export interface SmsAutofill {
+  /** Android SMS Retriever: the message ends with this build's app hash, `value`. */
+  readonly type: 'app_hash';
+  readonly value: string;
+}
+
 export interface SmsInfo {
   /** The message body, with the code placeholder unsubstituted. */
   readonly template: string | null;
@@ -12,7 +22,16 @@ export interface SmsInfo {
   readonly language: string | null;
   /** Seconds to keep an on-device listener armed. A budget, not a deadline. */
   readonly interceptionTimeoutSeconds: number | null;
-  /** Echoed only when one was stored. Equality with what you sent is the arming signal. */
+  /**
+   * Echoed only when a marker was stored. Null as well for a marker type this release does not
+   * model, which `unsafeRawPayload` still carries. An `app_hash` equal to the one you sent is the
+   * arming signal.
+   */
+  readonly autofill: SmsAutofill | null;
+  /**
+   * @deprecated Read {@link SmsInfo.autofill}. This is its `value` when the type is `app_hash`,
+   * else null.
+   */
   readonly appHash: string | null;
   /**
    * The generated code's length, 4–8, set per application on the server. Never compile a length

@@ -32,6 +32,7 @@ export const API_ERROR_CODES = [
   'delivery_method_inclusion',
   'delivery_method_invalid',
   'languages_invalid',
+  'autofill_invalid',
   'app_hash_invalid',
   'code_blank',
   'code_value_present',

@@ -135,7 +135,7 @@ function createRuntime(
     listener = armSmsListener({
       sentAppHash,
       template: sms.template,
-      echoedAppHash: sms.appHash,
+      echoedAutofill: sms.autofill,
       interceptionTimeoutSeconds: sms.interceptionTimeoutSeconds,
       onCode: (code) => dispatch({ type: 'smsCaptured', value: code }),
     });

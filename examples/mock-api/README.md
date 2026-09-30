@@ -159,9 +159,11 @@ client can report the right value without reading a message.
   in a `by_number` path silently addresses a different number.
 - **Language tags** are validated loosely and matched strictly: `pl` passes validation and then
   falls back to `en-US`, because templates are keyed on the exact canonical tag.
-- **`app_hash`** is validated on every start once supplied; a malformed one fails the whole
-  verification with `app_hash_invalid`, and the key is omitted from the response unless a hash was
-  stored.
+- **`sms.autofill`** is validated on every start once supplied: a malformed marker — not an object,
+  an unknown type, extra keys, an `app_hash` without a string value, a `none` with one — fails the
+  whole verification with `autofill_invalid`, and a malformed hash with `app_hash_invalid`. It is
+  echoed as `{ type: 'app_hash', value }` only when a hash was stored. A legacy `sms.app_hash` key is
+  ignored.
 - **Destination cooldown.** Starting a verification for the same application and destination again
   within `cooldownSeconds` (30 by default, `COOLDOWN_SECONDS` or the `cooldownSeconds` option; `0`
   disables it) of a non-denied one is refused with `429` and `destination_in_cooldown`, and carries

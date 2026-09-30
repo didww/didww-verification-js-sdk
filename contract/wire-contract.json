@@ -159,11 +159,11 @@
             "alwaysPresent": true,
             "notes": "Seconds to keep an on-device listener armed. A budget, not a deadline: manual entry works until expires_at."
           },
-          "app_hash": {
-            "type": "string",
+          "autofill": {
+            "type": "object",
             "nullable": false,
             "alwaysPresent": false,
-            "notes": "The key is omitted entirely unless a hash was stored on this verification. Equality with what was sent is the only confirmation that it was accepted."
+            "notes": "{ \"type\": \"app_hash\", \"value\": \"<hash>\" }. The key is omitted entirely unless a hash was stored on this verification. An app_hash value equal to what was sent is the only confirmation that it was accepted."
           },
           "code_length": {
             "type": "integer",
@@ -216,9 +216,10 @@
               "type": "array of string",
               "required": false
             },
-            "app_hash": {
-              "type": "string",
-              "required": false
+            "autofill": {
+              "type": "object",
+              "required": false,
+              "notes": "{ \"type\": \"app_hash\", \"value\": \"<hash>\" } frames the message for the Android SMS Retriever; { \"type\": \"none\" } asks for no marker. Omitted or null takes the application default. Any other shape, an unknown type or extra keys fail the whole request with autofill_invalid (422). A top-level sms.app_hash is not read."
             }
           }
         },

@@ -99,7 +99,7 @@ function StateCard({
           ) : (
             <View style={styles.cardInner}>
               <Field label="SMS template" value={state.sms.template ?? 'null'} />
-              <Field label="Echoed app hash" value={state.sms.appHash ?? 'null'} />
+              <Field label="Echoed app hash" value={state.sms.autofill?.value ?? 'null'} />
               <Field
                 label="Interception timeout"
                 value={

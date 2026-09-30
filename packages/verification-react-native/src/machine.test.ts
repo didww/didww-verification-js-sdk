@@ -46,6 +46,7 @@ const BASE: Omit<Verification, 'unsafeRawPayload'> = {
     template: 'Your code is {code}',
     language: 'en-US',
     interceptionTimeoutSeconds: 120,
+    autofill: { type: 'app_hash', value: 'FA+9qCX9VSu' },
     appHash: 'FA+9qCX9VSu',
     codeLength: 6,
   },

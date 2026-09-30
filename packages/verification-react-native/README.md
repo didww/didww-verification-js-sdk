@@ -263,11 +263,11 @@ build — that screen above is why it exists.
 
 **A wrong hash is completely silent.** The SMS arrives, the Retriever does not fire, nothing throws,
 nothing is logged in a release build, and the user types the code by hand as if the feature were
-never there. There is one guard: the server echoes the hash it stored, and if that echo does not
-equal what was sent the listener declines to arm and warns — but only in a development build, and
-only for that failure. A hash that is well-formed, accepted, stored and echoed, and simply belongs to
-a different build than the one running, produces no signal at all. Manual entry always works, so the
-worst case is a missing convenience you never notice.
+never there. There is one guard: the server echoes the hash it stored as `sms.autofill`, and if that
+echo does not equal what was sent the listener declines to arm and warns — but only in a development
+build, and only for that failure. A hash that is well-formed, accepted, stored and echoed, and simply
+belongs to a different build than the one running, produces no signal at all. Manual entry always
+works, so the worst case is a missing convenience you never notice.
 
 ### Expo Go, and anywhere else the module is absent
 

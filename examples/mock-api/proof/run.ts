@@ -292,7 +292,7 @@ async function main(): Promise<void> {
     equals('sms.language names the tag that matched', sms?.language, 'de-DE');
     check('interception_timeout is an integer', Number.isInteger(sms?.interception_timeout));
     equals('sms.code_length is the generated code length', sms?.code_length, code.length);
-    check('app_hash key omitted when none was sent', sms !== undefined && !('app_hash' in sms));
+    check('autofill key omitted when none was sent', sms !== undefined && !('autofill' in sms));
 
     const id = String(startedData.id);
     const byId = `/api/v1/verifications/${encodeURIComponent(id)}`;
@@ -376,10 +376,10 @@ async function main(): Promise<void> {
 
     const calloutWithHash = await request(base, 'POST', '/api/v1/verifications', {
       headers: { ...basicHeader(fx('key_basic')), 'content-type': JSON_TYPE },
-      body: startBody(nextDestination(), 'callout', { app_hash: 'not a hash' }),
+      body: startBody(nextDestination(), 'callout', { autofill: 'not a marker' }),
     });
     check(
-      'app_hash inside a callout block is dropped, not rejected',
+      'autofill inside a callout block is dropped, not rejected',
       calloutWithHash.status === 201,
       calloutWithHash.text,
     );
@@ -730,19 +730,60 @@ async function main(): Promise<void> {
 
     const badHash = await request(base, 'POST', '/api/v1/verifications', {
       headers: { ...basicHeader(fx('key_basic')), 'content-type': JSON_TYPE },
-      body: startBody(nextDestination(), 'sms', { app_hash: 'too-short' }),
+      body: startBody(nextDestination(), 'sms', {
+        autofill: { type: 'app_hash', value: 'too-short' },
+      }),
     });
     check('a malformed app hash fails the whole start', badHash.status === 422, badHash.text);
     equals('with app_hash_invalid', errorCodesOf(badHash), ['app_hash_invalid']);
 
+    for (const [label, autofill] of [
+      ['not an object', 'AbC12+/xyzQ'],
+      ['an unknown type', { type: 'domain' }],
+      ['an app_hash without a string value', { type: 'app_hash' }],
+      ['a value on none', { type: 'none', value: 'AbC12+/xyzQ' }],
+      ['an extra key', { type: 'app_hash', value: 'AbC12+/xyzQ', extra: true }],
+    ] as const) {
+      const badAutofill = await request(base, 'POST', '/api/v1/verifications', {
+        headers: { ...basicHeader(fx('key_basic')), 'content-type': JSON_TYPE },
+        body: startBody(nextDestination(), 'sms', { autofill }),
+      });
+      equals(`autofill ${label} fails with autofill_invalid`, errorCodesOf(badAutofill), [
+        'autofill_invalid',
+      ]);
+    }
+
+    const noMarker = await request(base, 'POST', '/api/v1/verifications', {
+      headers: { ...basicHeader(fx('key_basic')), 'content-type': JSON_TYPE },
+      body: startBody(nextDestination(), 'sms', { autofill: { type: 'none' } }),
+    });
+    check(
+      'autofill none starts with no marker echoed',
+      noMarker.status === 201 && !('autofill' in (dataOf(noMarker).sms as Record<string, unknown>)),
+      noMarker.text,
+    );
+
+    const legacyHash = await request(base, 'POST', '/api/v1/verifications', {
+      headers: { ...basicHeader(fx('key_basic')), 'content-type': JSON_TYPE },
+      body: startBody(nextDestination(), 'sms', { app_hash: 'not a hash' }),
+    });
+    check(
+      'a legacy app_hash key is ignored',
+      legacyHash.status === 201 &&
+        !('autofill' in (dataOf(legacyHash).sms as Record<string, unknown>)),
+      legacyHash.text,
+    );
+
     const goodHash = await request(base, 'POST', '/api/v1/verifications', {
       headers: { ...basicHeader(fx('key_basic')), 'content-type': JSON_TYPE },
-      body: startBody(nextDestination(), 'sms', { app_hash: 'AbC12+/xyzQ' }),
+      body: startBody(nextDestination(), 'sms', {
+        autofill: { type: 'app_hash', value: 'AbC12+/xyzQ' },
+      }),
     });
     equals(
-      'an accepted app hash is echoed back',
-      (dataOf(goodHash).sms as Record<string, unknown>).app_hash,
-      'AbC12+/xyzQ',
+      'an accepted app hash is echoed back as an autofill',
+      (dataOf(goodHash).sms as Record<string, unknown>).autofill,
+      { type: 'app_hash', value: 'AbC12+/xyzQ' },
     );
 
     section('state — expired is synthesised on read');

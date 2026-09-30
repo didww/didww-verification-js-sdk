@@ -3,6 +3,7 @@ import {
   INTERNAL_APP_HASH_KEY,
   VerificationClient,
   publicAuth,
+  type SmsAutofill,
   type SmsOptions,
 } from '@didww/verification-core';
 import { fakeTransport } from '@didww/verification-core/testing';
@@ -14,6 +15,10 @@ const SENT_HASH = 'FA+9qCX9VSu';
 const OTHER_HASH = 'abcdEFGH+/1';
 const TEMPLATE = 'Your DIDWW code is {{CODE}}. Do not share it.';
 const RETRIEVER_BODY = `<#> Your DIDWW code is 123456. Do not share it.\n${SENT_HASH}`;
+
+function appHashAutofill(value: string): SmsAutofill {
+  return { type: 'app_hash', value };
+}
 
 /** `__DEV__` is a Metro-injected global; under vitest it is absent unless a test sets it. */
 const metroGlobals = globalThis as unknown as { __DEV__?: boolean };
@@ -63,7 +68,7 @@ function listenerOptions(overrides: Partial<SmsListenerOptions> = {}): SmsListen
   return {
     sentAppHash: SENT_HASH,
     template: TEMPLATE,
-    echoedAppHash: SENT_HASH,
+    echoedAutofill: appHashAutofill(SENT_HASH),
     onCode: vi.fn(),
     ...overrides,
   };
@@ -103,7 +108,7 @@ describe('withAppHash', () => {
     expect(withAppHash(undefined, SENT_HASH)).toEqual({ [INTERNAL_APP_HASH_KEY]: SENT_HASH });
   });
 
-  it('reaches the wire as app_hash through the core request builder', async () => {
+  it('reaches the wire as an app_hash autofill through the core request builder', async () => {
     const payload = {
       id: 'ver-1',
       destination: '+4915112345678',
@@ -113,7 +118,7 @@ describe('withAppHash', () => {
       error_code: null,
       error_detail: null,
       expires_at: '2026-08-25T10:00:00Z',
-      sms: { template: TEMPLATE, interception_timeout: 120, app_hash: SENT_HASH },
+      sms: { template: TEMPLATE, interception_timeout: 120, autofill: appHashAutofill(SENT_HASH) },
     };
     const { transport, requests } = fakeTransport([
       { status: 201, headers: {}, body: JSON.stringify({ data: payload }) },
@@ -129,7 +134,7 @@ describe('withAppHash', () => {
       ...(sms === undefined ? {} : { sms }),
     });
 
-    expect(requests[0]?.body).toContain(`"app_hash":"${SENT_HASH}"`);
+    expect(requests[0]?.body).toContain(`"autofill":{"type":"app_hash","value":"${SENT_HASH}"}`);
     expect(requests[0]?.body).not.toContain(INTERNAL_APP_HASH_KEY);
   });
 });
@@ -151,7 +156,7 @@ describe('armSmsListener does not arm', () => {
 
     expect(
       armSmsListener(
-        listenerOptions({ sentAppHash: null, echoedAppHash: null, module: native.module }),
+        listenerOptions({ sentAppHash: null, echoedAutofill: null, module: native.module }),
       ),
     ).toBeNull();
     expect(native.start).not.toHaveBeenCalled();
@@ -161,7 +166,7 @@ describe('armSmsListener does not arm', () => {
     const native = fakeNativeModule();
 
     expect(
-      armSmsListener(listenerOptions({ echoedAppHash: null, module: native.module })),
+      armSmsListener(listenerOptions({ echoedAutofill: null, module: native.module })),
     ).toBeNull();
     expect(native.start).not.toHaveBeenCalled();
   });
@@ -170,7 +175,9 @@ describe('armSmsListener does not arm', () => {
     const native = fakeNativeModule();
 
     expect(
-      armSmsListener(listenerOptions({ echoedAppHash: OTHER_HASH, module: native.module })),
+      armSmsListener(
+        listenerOptions({ echoedAutofill: appHashAutofill(OTHER_HASH), module: native.module }),
+      ),
     ).toBeNull();
     expect(native.start).not.toHaveBeenCalled();
   });
@@ -208,7 +215,13 @@ describe('the echo-mismatch warning', () => {
     const onWarn = vi.fn();
     const native = fakeNativeModule();
 
-    armSmsListener(listenerOptions({ echoedAppHash: OTHER_HASH, onWarn, module: native.module }));
+    armSmsListener(
+      listenerOptions({
+        echoedAutofill: appHashAutofill(OTHER_HASH),
+        onWarn,
+        module: native.module,
+      }),
+    );
 
     expect(onWarn).toHaveBeenCalledTimes(1);
     expect(onWarn.mock.calls[0]?.[0]).toContain(`echoed "${OTHER_HASH}"`);
@@ -219,7 +232,7 @@ describe('the echo-mismatch warning', () => {
     setDevGlobal(true);
     const onWarn = vi.fn();
 
-    armSmsListener(listenerOptions({ echoedAppHash: null, onWarn, module: null }));
+    armSmsListener(listenerOptions({ echoedAutofill: null, onWarn, module: null }));
 
     expect(onWarn.mock.calls[0]?.[0]).toContain('echoed no app hash');
   });
@@ -228,7 +241,7 @@ describe('the echo-mismatch warning', () => {
     setDevGlobal(true);
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
-    armSmsListener(listenerOptions({ echoedAppHash: OTHER_HASH, module: null }));
+    armSmsListener(listenerOptions({ echoedAutofill: appHashAutofill(OTHER_HASH), module: null }));
 
     expect(warn).toHaveBeenCalledTimes(1);
     expect(warn.mock.calls[0]?.[0]).toContain('auto-capture stays off');
@@ -249,7 +262,9 @@ describe('the echo-mismatch warning', () => {
     const onWarn = vi.fn();
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
-    armSmsListener(listenerOptions({ echoedAppHash: OTHER_HASH, onWarn, module: null }));
+    armSmsListener(
+      listenerOptions({ echoedAutofill: appHashAutofill(OTHER_HASH), onWarn, module: null }),
+    );
 
     expect(onWarn).not.toHaveBeenCalled();
     expect(warn).not.toHaveBeenCalled();
@@ -260,7 +275,9 @@ describe('the echo-mismatch warning', () => {
     const onWarn = vi.fn();
 
     expect(() =>
-      armSmsListener(listenerOptions({ echoedAppHash: OTHER_HASH, onWarn, module: null })),
+      armSmsListener(
+        listenerOptions({ echoedAutofill: appHashAutofill(OTHER_HASH), onWarn, module: null }),
+      ),
     ).not.toThrow();
     expect(onWarn).not.toHaveBeenCalled();
   });

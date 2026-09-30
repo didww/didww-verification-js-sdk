@@ -45,7 +45,11 @@ function verificationBody(overrides: Record<string, unknown> = {}): string {
       error_code: null,
       error_detail: null,
       expires_at: inMinutes(10),
-      sms: { template: TEMPLATE, interception_timeout: 600, app_hash: APP_HASH },
+      sms: {
+        template: TEMPLATE,
+        interception_timeout: 600,
+        autofill: { type: 'app_hash', value: APP_HASH },
+      },
       ...overrides,
     },
   });
@@ -812,7 +816,7 @@ describe('useVerification: SMS auto-capture', () => {
       data: {
         destination: '+1 555 000 1111',
         delivery_method: 'sms',
-        sms: { app_hash: APP_HASH },
+        sms: { autofill: { type: 'app_hash', value: APP_HASH } },
       },
     });
     expect(native.start).toHaveBeenCalledTimes(1);
@@ -826,6 +830,20 @@ describe('useVerification: SMS auto-capture', () => {
     if (state.kind === 'captured') {
       expect(state.value).toBe('123456');
     }
+  });
+
+  it('does not arm when the echoed autofill carries a different hash', async () => {
+    const native = fakeNative();
+    nativeState.module = native.module;
+    const echo = { template: TEMPLATE, autofill: { type: 'app_hash', value: 'abcdEFGH+/1' } };
+    const { transport } = fakeTransport([ok(verificationBody({ sms: echo }))]);
+    const box: Box = { controller: null };
+
+    render(<Host client={clientFor(transport)} box={box} startOnMount={SMS_START} />);
+    await flush();
+
+    expect(native.hash).toHaveBeenCalledTimes(1);
+    expect(native.start).not.toHaveBeenCalled();
   });
 
   it('disarms on a terminal outcome', async () => {

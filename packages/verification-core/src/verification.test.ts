@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isFinished, isPending, type Verification } from './verification.js';
+import { isFinished, isPending, type SmsAutofill, type Verification } from './verification.js';
 
 function verification(overrides: Partial<Verification> = {}): Verification {
   return {
@@ -15,6 +15,7 @@ function verification(overrides: Partial<Verification> = {}): Verification {
       template: 'Your code is {code}',
       language: 'en-US',
       interceptionTimeoutSeconds: 120,
+      autofill: null,
       appHash: null,
       codeLength: 6,
     },
@@ -45,5 +46,16 @@ describe('isPending / isFinished', () => {
     const v = verification({ expiresAt: null, fee: null, sms: null, deliveryMethod: 'callout' });
     expect(v.expiresAt).toBeNull();
     expect(v.fee).toBeNull();
+  });
+});
+
+describe('SmsAutofill', () => {
+  it('keeps its type union closed, so a check on type narrows', () => {
+    const autofill: SmsAutofill = { type: 'app_hash', value: 'FA+9qCX9VSu' };
+    // @ts-expect-error A marker type this release does not model is not assignable.
+    const unmodelled: SmsAutofill = { type: 'domain', value: 'FA+9qCX9VSu' };
+
+    expect(autofill.type).toBe('app_hash');
+    expect(unmodelled.type).toBe('domain');
   });
 });
