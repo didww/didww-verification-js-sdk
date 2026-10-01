@@ -5,13 +5,6 @@ Notable changes to `@didww/verification-core`.
 This package follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Two names are excluded from semver and may change in any release:
 `Verification.unsafeRawPayload` and `INTERNAL_APP_HASH_KEY`.
 
-## Unreleased
-
-- Every request now carries `X-User-Agent: didww-verification-<runtime>/<version>`. The runtime
-  is detected once at construction: React Native, then Node, then plain `didww-verification-js`.
-- `ClientOptions.userAgent` is deprecated and ignored: the SDK identifies itself with the
-  `X-User-Agent` header above. Will be removed in the next major version.
-
 ## 1.1.0 — 2026-10
 
 - `SmsInfo.codeLength` and `CalloutInfo.codeLength` — the generated code's length, 4–8, set per
@@ -26,6 +19,10 @@ This package follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - The optional logger's redaction now masks every run of four or more digits outside a UUID,
   rather than six or more: the generated code is 4–8 digits, chosen by the server, and a shorter
   run would leak it. Ports and years are masked along with it; a verification id stays readable.
+- Every request now carries `X-User-Agent: didww-verification-<runtime>/<version>`. The runtime
+  is detected once at construction: React Native, then Node, then plain `didww-verification-js`.
+- `ClientOptions.userAgent` is deprecated and ignored: the SDK identifies itself with the
+  `X-User-Agent` header above. Will be removed in the next major version.
 
 ## 1.0.0 — 2026-09
 

@@ -4,14 +4,14 @@ plugins {
 }
 
 group = 'com.didww.verification.rn'
-version = '1.0.0'
+version = '1.1.0'
 
 android {
   namespace "com.didww.verification.rn"
   defaultConfig {
     // expo-module-gradle-plugin fails at configuration time without both of these.
     versionCode 1
-    versionName "1.0.0"
+    versionName "1.1.0"
     testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
   }
   lintOptions {
