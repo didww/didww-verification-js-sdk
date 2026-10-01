@@ -23,6 +23,7 @@ import {
   type Transport,
 } from './transport.js';
 import type { Verification, VerificationResult } from './verification.js';
+import { CORE_VERSION } from './version.js';
 import {
   decodeErrorEnvelope,
   decodeVerificationEnvelope,
@@ -54,6 +55,31 @@ interface RequestSpec extends RequestTarget {
   readonly method: 'GET' | 'POST' | 'PUT';
   readonly body?: string;
   readonly signal?: AbortSignal;
+}
+
+/**
+ * The globals this package reads to tell React Native, Node and everything else apart, typed by
+ * hand rather than through `@types/node` or React Native's own types — `tsconfig.json`'s `types`
+ * is deliberately empty so a real Node or React Native global never typechecks its way into this
+ * runtime-agnostic package, and `check-no-node-builtins.mjs` would fail on a literal `process`
+ * import from a React Native bundle.
+ */
+interface RuntimeGlobals {
+  readonly navigator?: { readonly product?: string };
+  readonly process?: { readonly versions?: { readonly node?: unknown } };
+}
+
+// React Native is checked first: some React Native setups polyfill `process`, so testing for it
+// first would misreport a React Native app as Node.
+function defaultXUserAgent(): string {
+  const runtime = globalThis as RuntimeGlobals;
+  if (runtime.navigator?.product === 'ReactNative') {
+    return `didww-verification-react-native/${CORE_VERSION}`;
+  }
+  if (typeof runtime.process?.versions?.node === 'string') {
+    return `didww-verification-node/${CORE_VERSION}`;
+  }
+  return `didww-verification-js/${CORE_VERSION}`;
 }
 
 function baseUrlOf(options: ClientOptions): URL {
@@ -95,7 +121,7 @@ export class VerificationClient {
   readonly #auth: AuthProvider;
   readonly #transport: Transport;
   readonly #retry: RetryPolicy;
-  readonly #userAgent: string | undefined;
+  readonly #xUserAgent: string;
   readonly #logger: ((line: string) => void) | undefined;
   readonly #keepRawPayload: boolean;
 
@@ -105,7 +131,7 @@ export class VerificationClient {
     this.#transport =
       options.transport ?? fetchTransport({ timeoutMs: options.timeoutMs ?? DEFAULT_TIMEOUT_MS });
     this.#retry = options.retry ?? DEFAULT_RETRY_POLICY;
-    this.#userAgent = options.userAgent;
+    this.#xUserAgent = defaultXUserAgent();
     this.#logger = options.logger;
     this.#keepRawPayload = options.keepRawPayload === true;
   }
@@ -225,12 +251,19 @@ export class VerificationClient {
       );
     }
 
-    const headers: Record<string, string> = { Accept: JSON_CONTENT_TYPE, ...authHeaders };
+    // Filtered before the spread, not just overwritten after it: header names are case-insensitive
+    // and a plain object spread is not, so a provider's `x-user-agent` would otherwise survive next
+    // to ours and `fetch`'s `Headers` would join both onto the wire.
+    const authHeadersWithoutXUserAgent = Object.fromEntries(
+      Object.entries(authHeaders).filter(([name]) => name.toLowerCase() !== 'x-user-agent'),
+    );
+    const headers: Record<string, string> = {
+      Accept: JSON_CONTENT_TYPE,
+      ...authHeadersWithoutXUserAgent,
+      'X-User-Agent': this.#xUserAgent,
+    };
     if (body !== undefined) {
       headers['Content-Type'] = contentType;
-    }
-    if (this.#userAgent !== undefined) {
-      headers['User-Agent'] = this.#userAgent;
     }
 
     const request: HttpRequest = {

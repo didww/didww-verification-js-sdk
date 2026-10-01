@@ -25,6 +25,7 @@
     "check:zero-deps": "node scripts/check-zero-deps.mjs",
     "check:no-node-builtins": "node scripts/check-no-node-builtins.mjs",
     "check:package-metadata": "node scripts/check-package-metadata.mjs",
+    "check:version-constants": "node scripts/check-version-constants.mjs",
     "check:no-internal-refs": "node scripts/check-no-internal-refs.mjs",
     "check:no-internal-dir": "node scripts/check-no-internal-dir.mjs"
   },

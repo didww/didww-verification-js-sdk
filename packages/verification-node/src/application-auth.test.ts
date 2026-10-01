@@ -139,6 +139,7 @@ describe('applicationAuth through the client', () => {
     expect(Object.keys(recorded.headers).sort()).toEqual([
       'Accept',
       'Authorization',
+      'X-User-Agent',
       'x-timestamp',
     ]);
     expect(recorded.body).toBeUndefined();
@@ -158,6 +159,7 @@ describe('applicationAuth through the client', () => {
       'Accept',
       'Authorization',
       'Content-Type',
+      'X-User-Agent',
       'x-timestamp',
     ]);
     expect(seen[0]?.body).toBe(recorded.body);
