@@ -133,6 +133,20 @@ it.
 release does not model. The `undefined` is the point — it is what lets a channel added after this
 release through untouched instead of rejecting it.
 
+## Passing your own context
+
+```ts
+await client.startVerification({
+  destination: '+351912345678',
+  deliveryMethod: 'sms',
+  custom: 'order-42',
+});
+```
+
+`custom` is up to 4096 characters of arbitrary text, sent unchanged to your callback server as
+`data.custom` in the `verification_request` event. It is not returned on the verification, and an
+empty string is treated as absent. Longer text fails the start with `custom_too_long`.
+
 ## Choosing a language
 
 ```ts

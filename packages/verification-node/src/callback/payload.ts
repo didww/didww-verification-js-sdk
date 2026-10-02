@@ -10,6 +10,8 @@ export interface CallbackPayload {
     readonly id: string;
     readonly destination: string;
     readonly deliveryMethod: DeliveryMethod;
+    /** The `custom` text sent at start, untrusted: validate it against your own records. */
+    readonly custom: string | null;
   };
 }
 
@@ -19,8 +21,9 @@ export type CallbackDecision = { action: 'allow' } | { action: 'deny' };
 /**
  * Our own bound on unauthenticated work — nothing is hashed until a body passes it. It mirrors no
  * server-side limit; the server's own cap applies to the answer it reads back, not to what it sends.
+ * Sized for a 4096-character `custom` the server escapes to six bytes per character (~25 KB).
  */
-export const DEFAULT_MAX_BODY_BYTES = 8192;
+export const DEFAULT_MAX_BODY_BYTES = 32768;
 
 /** Bytes, never `body.length`: a multi-byte body has to be measured as it arrived. */
 export function bodyByteLength(body: string): number {
@@ -63,5 +66,10 @@ export function parseCallbackPayload(body: string, key: string): CallbackPayload
   const deliveryMethod = stringAt(data, 'delivery_method');
   if (id === null || destination === null || deliveryMethod === null) return null;
 
-  return { event, key, data: { id, destination, deliveryMethod } };
+  // Absent or non-string is null, not malformed: the key's presence is the server's, not a gate.
+  return {
+    event,
+    key,
+    data: { id, destination, deliveryMethod, custom: stringAt(data, 'custom') },
+  };
 }

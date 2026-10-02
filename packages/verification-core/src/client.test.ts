@@ -558,6 +558,26 @@ describe('the start body', () => {
     );
   });
 
+  it('sends custom as a top-level data key', async () => {
+    const { client, requests } = setup([CREATED]);
+    await client.startVerification({
+      destination: DESTINATION,
+      deliveryMethod: 'sms',
+      custom: 'order-42 \u00e9',
+    });
+
+    expect(JSON.parse(only(requests).body ?? '')).toEqual({
+      data: { destination: DESTINATION, delivery_method: 'sms', custom: 'order-42 \u00e9' },
+    });
+  });
+
+  it('omits custom when it is not given', async () => {
+    const { client, requests } = setup([CREATED]);
+    await client.startVerification({ destination: DESTINATION, deliveryMethod: 'sms' });
+
+    expect(only(requests).body).not.toContain('custom');
+  });
+
   it('omits an empty sms block', async () => {
     const { client, requests } = setup([CREATED]);
     await client.startVerification({ destination: DESTINATION, deliveryMethod: 'sms', sms: {} });

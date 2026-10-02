@@ -39,6 +39,11 @@ export interface StartOptions {
   readonly deliveryMethod: DeliveryMethod;
   readonly sms?: SmsOptions;
   readonly callout?: CalloutOptions;
+  /**
+   * Up to 4096 characters of arbitrary text, forwarded unchanged to your callback server in the
+   * `verification_request` event as `data.custom`. It is not returned on the verification.
+   */
+  readonly custom?: string;
   readonly signal?: AbortSignal;
 }
 

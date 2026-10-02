@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 
 import {
   APP_HASH_PATTERN,
+  CUSTOM_MAX_LENGTH,
   CALLBACK_READ_LIMIT_BYTES,
   CALLBACK_RETRIES,
   CODE,
@@ -326,6 +327,7 @@ interface StartRequest {
   template: string | null;
   language: string | null;
   appHash: string | null;
+  custom: string | null;
 }
 
 function readStartRequest(data: Record<string, unknown>): StartRequest | string[] {
@@ -379,6 +381,19 @@ function readStartRequest(data: Record<string, unknown>): StartRequest | string[
     }
   }
 
+  // As the API does: numbers and booleans become their text, objects and arrays are dropped, and
+  // an empty string is absent. The length is counted in characters, not UTF-16 units.
+  let custom: string | null = null;
+  const rawCustom = data.custom;
+  const customText =
+    typeof rawCustom === 'string' || typeof rawCustom === 'number' || typeof rawCustom === 'boolean'
+      ? String(rawCustom)
+      : '';
+  if (customText !== '') {
+    if ([...customText].length > CUSTOM_MAX_LENGTH) errors.push(CODE.customTooLong);
+    else custom = customText;
+  }
+
   if (errors.length > 0) return errors;
   return {
     destination: digitsOf(destination as string),
@@ -386,6 +401,7 @@ function readStartRequest(data: Record<string, unknown>): StartRequest | string[
     template: deliveryMethod === METHOD.sms && language !== null ? resolveTemplate(language) : null,
     language,
     appHash,
+    custom,
   };
 }
 
@@ -634,7 +650,12 @@ export function createMockApi(options: MockApiOptions = {}): MockApi {
       const decision = await decideStart(
         context.application,
         context.scheme,
-        { id, destination: parsed.destination, delivery_method: parsed.deliveryMethod },
+        {
+          id,
+          destination: parsed.destination,
+          delivery_method: parsed.deliveryMethod,
+          ...(parsed.custom === null ? {} : { custom: parsed.custom }),
+        },
         callbackTimeoutMs,
       );
       // The backend anchors the cooldown on the row's creation time, set once the callback has

@@ -189,10 +189,14 @@ read your answer.
 `body_too_large`, `unparseable_body`. The first five answer 401 and the last two 400.
 
 Other details: the timestamp tolerance defaults to **300 seconds** and is settable with `tolerance`.
-Inbound bodies over **8 KiB** are rejected before anything is hashed — this is a bound of our own on
-unauthenticated work, and is not the API's read limit on your reply, which happens to be the same
-size. On `{ ok: true }` the payload carries `event`, the `key` the request authenticated as, and
-`data.id` / `data.destination` / `data.deliveryMethod`.
+Inbound bodies over **32 KiB** are rejected before anything is hashed — this is a bound of our own on
+unauthenticated work, sized for a 4096-character `custom`, and is not the API's 8 KiB read limit on
+your reply. On `{ ok: true }` the payload carries `event`, the `key` the request authenticated as, and
+`data.id` / `data.destination` / `data.deliveryMethod` / `data.custom`.
+
+`data.custom` is the `custom` text given to `startVerification`, or `null` when none was sent (the
+server leaves the key out then). When the start came from a mobile app, the app chose that value, so validate it
+against your own records before acting on it.
 
 ### Without Express
 

@@ -257,6 +257,9 @@ export function encodeStartRequest(options: StartOptions): string {
   if (block !== undefined) {
     data[options.deliveryMethod] = block;
   }
+  if (options.custom !== undefined) {
+    data.custom = options.custom;
+  }
   return JSON.stringify({ data });
 }
 

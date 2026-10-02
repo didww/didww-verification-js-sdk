@@ -60,12 +60,16 @@ Content-Type: application/json
 Authorization: Application <key>:<signature>
 x-timestamp: <unix epoch seconds>
 
-{"event":"verification_request","data":{"id":"…","destination":"…","delivery_method":"sms"}}
+{"event":"verification_request","data":{"id":"…","destination":"…","delivery_method":"sms","custom":"…"}}
 ```
 
 `destination` arrives as digits with no `+`. `delivery_method` is `sms` or `callout` for the
 channels this release models; any other value passes through as the string received rather than
 failing the parse.
+
+`custom` is the text the start request carried in its own `custom` field, unchanged; the key is
+absent when none was sent, and the parser reads that as `null`. It is client-supplied whenever the start came from a device, so check it against your
+own records instead of trusting it.
 
 ## The signed path, and the empty string
 
@@ -148,7 +152,7 @@ error.
 
 | Reason                    | Status | Means                                                      |
 | ------------------------- | ------ | ---------------------------------------------------------- |
-| `body_too_large`          | 400    | over `maxBodyBytes` (8192 by default)                      |
+| `body_too_large`          | 400    | over `maxBodyBytes` (32768 by default)                     |
 | `missing_signature`       | 401    | no `Authorization`, or not `Application <key>:<signature>` |
 | `missing_timestamp`       | 401    | no `x-timestamp`, or blank                                 |
 | `timestamp_out_of_window` | 401    | outside the tolerance, or not Unix seconds                 |
@@ -156,9 +160,10 @@ error.
 | `signature_mismatch`      | 401    | the HMAC differs — most often the path                     |
 | `unparseable_body`        | 400    | signature held, envelope malformed                         |
 
-`maxBodyBytes` is the SDK's own bound on unauthenticated work and mirrors no server-side limit. The
-API's own 8192-byte cap, below, applies to the answer it reads back from you. The two happen to
-share a default; raising one does nothing to the other.
+`maxBodyBytes` is the SDK's own bound on unauthenticated work and mirrors no server-side limit; its
+default leaves room for a 4096-character `custom`, which escaped JSON can grow to about 25 KB. The
+API's own 8192-byte cap, below, applies to the answer it reads back from you; raising one does
+nothing to the other.
 
 **The reason is never echoed in the response body.** The adapter answers a bare status.
 `unknown_key` is decided _before_ the signature is checked — it has to be, since the key selects the
