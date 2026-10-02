@@ -174,13 +174,14 @@ v.callout?.language; // 'en-US' — no recording for ka-GE, so it fell back
 before the server began recording one. The supported tags are server-side data and change without
 an SDK release, so this package hardcodes no list; the API reference carries the current one.
 
-**`app_hash` is not in `SmsOptions`, on purpose.** It identifies the _running build_, so it cannot
-be a value your code writes down: the hash of a debug build, a locally signed build and a
-store-distributed build all differ. The React Native package computes it on the device and hands it
-to the request builder through an internal channel. Nothing else needs it, and a hash that is
-merely wrong-looking fails the whole verification with `app_hash_invalid` rather than being
-ignored — so this package validates whatever reaches it and throws `ConfigurationError` before
-issuing a request.
+**The SMS Retriever app hash is not in `SmsOptions`, on purpose.** It identifies the _running
+build_, so it cannot be a value your code writes down: the hash of a debug build, a locally signed
+build and a store-distributed build all differ. The React Native package computes it on the device
+and hands it to the request builder through an internal channel, which sends it as
+`sms.autofill: { type: 'app_hash', value }`. Nothing else needs it, and a hash that is merely
+wrong-looking fails the whole verification with `app_hash_invalid` rather than being ignored — so
+this package validates whatever reaches it and throws `ConfigurationError` before issuing a
+request.
 
 ## Reading a verification
 
@@ -216,8 +217,11 @@ therefore reach `expired` without any state change having occurred.
 - `interceptionTimeoutSeconds` — **a budget, not a deadline**. It is how long to keep an on-device
   listener armed, not how long the user has. Manual entry keeps working until `expiresAt`, so never
   fail a verification because this ran out.
-- `appHash` — echoed back only when one was stored. Equality with what was sent is the only
-  confirmation the server accepted it.
+- `autofill` — the marker the message is framed with, `{ type: 'app_hash', value }`, echoed back
+  only when one was stored. A `value` equal to the hash that was sent is the only confirmation the
+  server accepted it. `null` as well for a marker type this release does not model.
+- `appHash` — **deprecated**, kept for compatibility: `autofill.value` when its type is
+  `'app_hash'`, else `null`.
 - `codeLength` — the generated code's length, 4–8, set per application on the server. `callout`
   carries the same field. Never compile a length into your UI.
 
@@ -383,7 +387,6 @@ const body = JSON.stringify({
       template: 'Your code is {{CODE}}',
       language: 'en-US',
       interception_timeout: 300,
-      app_hash: null,
     },
   },
 });

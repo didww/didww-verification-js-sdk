@@ -15,7 +15,7 @@ const smsCreate: Record<string, unknown> = {
     template: 'Your verification code is {code}',
     language: 'de-DE',
     interception_timeout: 120,
-    app_hash: 'FA+9qCX9VSu',
+    autofill: { type: 'app_hash', value: 'FA+9qCX9VSu' },
     code_length: 6,
   },
 };
@@ -76,6 +76,7 @@ describe('decodeVerificationEnvelope', () => {
         template: 'Your verification code is {code}',
         language: 'de-DE',
         interceptionTimeoutSeconds: 120,
+        autofill: { type: 'app_hash', value: 'FA+9qCX9VSu' },
         appHash: 'FA+9qCX9VSu',
         codeLength: 6,
       },
@@ -246,18 +247,54 @@ describe('decodeVerificationEnvelope', () => {
     expect(error.body).toBe(raw);
   });
 
-  it('decodes an absent app_hash to null', () => {
+  it('decodes an absent autofill to null', () => {
     const raw = body({
       ...smsCreate,
       sms: { template: 'Code: {code}', interception_timeout: 120 },
     });
-    expect(raw).not.toContain('app_hash');
+    expect(raw).not.toContain('autofill');
+
+    const sms = decodeVerificationEnvelope(raw).sms;
+    expect(sms?.autofill).toBeNull();
+    expect(sms?.appHash).toBeNull();
+  });
+
+  it('decodes a null autofill to null', () => {
+    const raw = body({ ...smsCreate, sms: { autofill: null } });
+
+    expect(decodeVerificationEnvelope(raw).sms?.autofill).toBeNull();
+  });
+
+  it('decodes an app_hash autofill, and derives the deprecated appHash from it', () => {
+    const sms = decodeVerificationEnvelope(body({ ...smsCreate })).sms;
+
+    expect(sms?.autofill).toEqual({ type: 'app_hash', value: 'FA+9qCX9VSu' });
+    expect(sms?.appHash).toBe('FA+9qCX9VSu');
+  });
+
+  it('ignores a top-level sms.app_hash, which the server no longer sends', () => {
+    const raw = body({ ...smsCreate, sms: { app_hash: 'FA+9qCX9VSu' } });
 
     expect(decodeVerificationEnvelope(raw).sms?.appHash).toBeNull();
   });
 
-  it('decodes a present app_hash to the string', () => {
-    expect(decodeVerificationEnvelope(body({ ...smsCreate })).sms?.appHash).toBe('FA+9qCX9VSu');
+  it('reads an autofill type this release does not model as null rather than failing', () => {
+    const raw = body({ ...smsCreate, sms: { autofill: { type: 'carrier_pigeon' } } });
+
+    const sms = decodeVerificationEnvelope(raw).sms;
+    expect(sms?.autofill).toBeNull();
+    expect(sms?.appHash).toBeNull();
+  });
+
+  it.each([
+    ['not an object', 'FA+9qCX9VSu'],
+    ['an array', [{ type: 'app_hash', value: 'FA+9qCX9VSu' }]],
+    ['without a string type', { type: 7, value: 'FA+9qCX9VSu' }],
+    ['an app_hash without a string value', { type: 'app_hash' }],
+  ])('rejects an autofill that is %s', (_, autofill) => {
+    const raw = body({ ...smsCreate, sms: { autofill } });
+
+    expect(decodingErrorFrom(() => decodeVerificationEnvelope(raw)).body).toBe(raw);
   });
 
   it('decodes a null template and a missing interception_timeout defensively', () => {
@@ -269,6 +306,7 @@ describe('decodeVerificationEnvelope', () => {
       template: null,
       language: null,
       interceptionTimeoutSeconds: null,
+      autofill: null,
       appHash: null,
       codeLength: null,
     });

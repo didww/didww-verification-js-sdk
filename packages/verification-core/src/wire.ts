@@ -6,7 +6,7 @@ import {
   type SmsOptions,
   type StartOptions,
 } from './options.js';
-import type { CalloutInfo, SmsInfo, Verification } from './verification.js';
+import type { CalloutInfo, SmsAutofill, SmsInfo, Verification } from './verification.js';
 
 // The malformed/unknown boundary: a body that is not JSON, a field of the wrong JSON type, and a
 // missing non-nullable field are MALFORMED and throw `DecodingError`. A right-typed value this
@@ -111,14 +111,34 @@ function optionalBlock<T>(
   return decode(source, body);
 }
 
+// A marker type added after this release is unknown rather than malformed, so it reads as null
+// instead of failing the whole verification.
+function decodeAutofill(source: Record<string, unknown>, body: string): SmsAutofill | null {
+  const value = source['autofill'];
+  if (value === undefined || value === null) {
+    return null;
+  }
+  const autofill = asRecord(value);
+  if (autofill === null) {
+    fail('`autofill` is present but is not an object.', body);
+  }
+  const type = requiredString(autofill, 'type', body);
+  if (type !== 'app_hash') {
+    return null;
+  }
+  return { type, value: requiredString(autofill, 'value', body) };
+}
+
 // `language` is read nullably though the specification requires it: the column behind it is
 // nullable, so a verification stored before the server recorded one answers with null.
 function decodeSms(source: Record<string, unknown>, body: string): SmsInfo {
+  const autofill = decodeAutofill(source, body);
   return {
     template: nullableString(source, 'template', body),
     language: nullableString(source, 'language', body),
     interceptionTimeoutSeconds: nullableNumber(source, 'interception_timeout', body),
-    appHash: nullableString(source, 'app_hash', body),
+    autofill,
+    appHash: autofill?.type === 'app_hash' ? autofill.value : null,
     codeLength: nullableNumber(source, 'code_length', body),
   };
 }
@@ -228,7 +248,8 @@ function encodeSmsBlock(options: SmsOptions | undefined): Record<string, unknown
   const appHash = (options as InternalSmsOptions)[INTERNAL_APP_HASH_KEY];
   return blockOf({
     languages: languagesOf(options),
-    app_hash: appHash === undefined ? undefined : validAppHash(appHash),
+    autofill:
+      appHash === undefined ? undefined : { type: 'app_hash', value: validAppHash(appHash) },
   });
 }
 

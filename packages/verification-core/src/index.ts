@@ -30,7 +30,13 @@ export {
 export type { ApiErrorItem } from './errors.js';
 
 export { isFinished, isPending } from './verification.js';
-export type { CalloutInfo, SmsInfo, Verification, VerificationResult } from './verification.js';
+export type {
+  CalloutInfo,
+  SmsAutofill,
+  SmsInfo,
+  Verification,
+  VerificationResult,
+} from './verification.js';
 
 export { INTERNAL_APP_HASH_KEY } from './options.js';
 export type {

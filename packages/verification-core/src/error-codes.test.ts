@@ -51,3 +51,11 @@ describe('isKnownApiErrorCode', () => {
     expect(isKnownApiErrorCode(value)).toBe(false);
   });
 });
+
+describe('API_ERROR_CODES', () => {
+  it('lists autofill_invalid right before app_hash_invalid', () => {
+    const at = API_ERROR_CODES.indexOf('app_hash_invalid');
+
+    expect(API_ERROR_CODES[at - 1]).toBe('autofill_invalid');
+  });
+});

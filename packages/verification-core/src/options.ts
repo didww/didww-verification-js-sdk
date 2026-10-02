@@ -23,8 +23,8 @@ export interface CalloutOptions {
 /**
  * Internal and excluded from semver: the key `@didww/verification-react-native` uses to hand a
  * device-computed SMS Retriever hash to the request builder, which validates it and emits it as
- * `app_hash`. A plain string rather than a `unique symbol`, which is nominal per declaration site
- * and so would not survive two installed copies of this package.
+ * an `app_hash` autofill. A plain string rather than a `unique symbol`, which is nominal per
+ * declaration site and so would not survive two installed copies of this package.
  */
 export const INTERNAL_APP_HASH_KEY = '@didww/verification-core#appHash';
 
