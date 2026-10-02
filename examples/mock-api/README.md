@@ -162,8 +162,9 @@ client can report the right value without reading a message.
 - **`sms.autofill`** is validated on every start once supplied: a malformed marker — not an object,
   an unknown type, extra keys, an `app_hash` without a string value, a `none` with one — fails the
   whole verification with `autofill_invalid`, and a malformed hash with `app_hash_invalid`. It is
-  echoed as `{ type: 'app_hash', value }` only when a hash was stored. A legacy `sms.app_hash` key is
-  ignored.
+  echoed as `{ type: 'app_hash', value }`, plus the deprecated flat `app_hash`, only when a hash was
+  stored. The deprecated `sms.app_hash` is read only when `autofill` is absent; sending both fails
+  the request with `autofill_invalid`.
 - **Destination cooldown.** Starting a verification for the same application and destination again
   within `cooldownSeconds` (30 by default, `COOLDOWN_SECONDS` or the `cooldownSeconds` option; `0`
   disables it) of a non-denied one is refused with `429` and `destination_in_cooldown`, and carries

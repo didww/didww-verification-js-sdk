@@ -380,8 +380,11 @@ export function renderVerification(row: VerificationRow, at: number): Record<str
       interception_timeout: row.lifetimeSeconds,
       code_length: row.codeLength,
     };
-    // The key is omitted entirely unless a hash was stored on this verification.
-    if (row.appHash !== null) sms.autofill = { type: 'app_hash', value: row.appHash };
+    // Both keys are omitted entirely unless a hash was stored on this verification.
+    if (row.appHash !== null) {
+      sms.autofill = { type: 'app_hash', value: row.appHash };
+      sms.app_hash = row.appHash;
+    }
     body.sms = sms;
   }
   if (row.deliveryMethod === METHOD.callout) {

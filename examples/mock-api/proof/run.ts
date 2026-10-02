@@ -767,12 +767,16 @@ async function main(): Promise<void> {
       headers: { ...basicHeader(fx('key_basic')), 'content-type': JSON_TYPE },
       body: startBody(nextDestination(), 'sms', { app_hash: 'not a hash' }),
     });
-    check(
-      'a legacy app_hash key is ignored',
-      legacyHash.status === 201 &&
-        !('autofill' in (dataOf(legacyHash).sms as Record<string, unknown>)),
-      legacyHash.text,
-    );
+    equals('a malformed legacy app_hash fails', errorCodesOf(legacyHash), ['app_hash_invalid']);
+
+    const bothHashes = await request(base, 'POST', '/api/v1/verifications', {
+      headers: { ...basicHeader(fx('key_basic')), 'content-type': JSON_TYPE },
+      body: startBody(nextDestination(), 'sms', {
+        autofill: { type: 'app_hash', value: 'AbC12+/xyzQ' },
+        app_hash: 'AbC12+/xyzQ',
+      }),
+    });
+    equals('autofill together with app_hash fails', errorCodesOf(bothHashes), ['autofill_invalid']);
 
     const goodHash = await request(base, 'POST', '/api/v1/verifications', {
       headers: { ...basicHeader(fx('key_basic')), 'content-type': JSON_TYPE },

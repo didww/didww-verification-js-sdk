@@ -163,7 +163,7 @@
             "type": "object",
             "nullable": false,
             "alwaysPresent": false,
-            "notes": "{ \"type\": \"app_hash\", \"value\": \"<hash>\" }. The key is omitted entirely unless a hash was stored on this verification. An app_hash value equal to what was sent is the only confirmation that it was accepted."
+            "notes": "{ \"type\": \"app_hash\", \"value\": \"<hash>\" }. The key is omitted entirely unless a hash was stored on this verification. The deprecated flat app_hash echoes the same value and is likewise omitted. An app_hash value equal to what was sent is the only confirmation that it was accepted."
           },
           "code_length": {
             "type": "integer",
@@ -219,7 +219,7 @@
             "autofill": {
               "type": "object",
               "required": false,
-              "notes": "{ \"type\": \"app_hash\", \"value\": \"<hash>\" } frames the message for the Android SMS Retriever; { \"type\": \"none\" } asks for no marker. Omitted or null takes the application default. Any other shape, an unknown type or extra keys fail the whole request with autofill_invalid (422). A top-level sms.app_hash is not read."
+              "notes": "{ \"type\": \"app_hash\", \"value\": \"<hash>\" } frames the message for the Android SMS Retriever; { \"type\": \"none\" } asks for no marker. Omitted or null takes the application default. Any other shape, an unknown type or extra keys fail the whole request with autofill_invalid (422). The deprecated flat sms.app_hash is read only when autofill is absent; a request carrying both fails with autofill_invalid (422)."
             }
           }
         },

@@ -380,15 +380,24 @@ function readStartRequest(data: Record<string, unknown>): StartRequest | string[
   const language = catalogue === undefined ? null : resolveLanguage(requested, catalogue);
 
   // autofill is read inside the sms block only; elsewhere the key is dropped, not rejected. A null
-  // one is the application default, which is no marker. A legacy app_hash key is never read.
+  // one is the application default, which is no marker. The deprecated flat app_hash is read only
+  // when autofill is absent; sending both fails the request.
   let appHash: string | null = null;
   const autofill = deliveryMethod === METHOD.sms ? options.autofill : undefined;
+  const legacyHash = deliveryMethod === METHOD.sms ? options.app_hash : undefined;
+  const hasLegacy = legacyHash !== undefined && legacyHash !== null;
   if (autofill !== undefined && autofill !== null) {
-    if (!isAutofill(autofill)) {
+    if (!isAutofill(autofill) || hasLegacy) {
       errors.push(CODE.autofillInvalid);
     } else if (autofill.type === 'app_hash') {
       if (!APP_HASH_PATTERN.test(autofill.value)) errors.push(CODE.appHashInvalid);
       else appHash = autofill.value;
+    }
+  } else if (hasLegacy) {
+    if (typeof legacyHash !== 'string' || !APP_HASH_PATTERN.test(legacyHash)) {
+      errors.push(CODE.appHashInvalid);
+    } else {
+      appHash = legacyHash;
     }
   }
 

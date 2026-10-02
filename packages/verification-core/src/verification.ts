@@ -29,8 +29,8 @@ export interface SmsInfo {
    */
   readonly autofill: SmsAutofill | null;
   /**
-   * @deprecated Read {@link SmsInfo.autofill}. This is its `value` when the type is `app_hash`,
-   * else null.
+   * @deprecated Use {@link SmsInfo.autofill} instead. This is its `value` when the type is
+   * `app_hash`, else null.
    */
   readonly appHash: string | null;
   /**
