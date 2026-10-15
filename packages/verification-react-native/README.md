@@ -192,9 +192,8 @@ discarding the stale result rather than surfacing an error, so nothing emits it 
 `source` before you read `code` — the wire has a `superseded` slug of its own, and `source` is what
 tells the two apart.
 
-Three codes read oddly and should be translated for your users: `stale_dispatch` is "the dispatch
-could not be completed in time", `superseded` is "replaced by a newer verification for the same
-number", and `application_deleted` means the application record this verification belonged to was
+Two codes read oddly and should be translated for your users: `superseded` is "replaced by a newer
+verification for the same number", and `application_deleted` means the application record this verification belonged to was
 removed while it was still in flight.
 
 ## The code input

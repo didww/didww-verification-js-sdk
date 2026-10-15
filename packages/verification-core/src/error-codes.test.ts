@@ -47,7 +47,10 @@ describe('isKnownApiErrorCode', () => {
     expect(isKnownApiErrorCode(code)).toBe(true);
   });
 
-  it.each(['carrier_pigeon', '', 'Unauthorized', 'toString'])('is false for %j', (value) => {
-    expect(isKnownApiErrorCode(value)).toBe(false);
-  });
+  it.each(['carrier_pigeon', '', 'Unauthorized', 'toString', 'stale_dispatch'])(
+    'is false for %j',
+    (value) => {
+      expect(isKnownApiErrorCode(value)).toBe(false);
+    },
+  );
 });

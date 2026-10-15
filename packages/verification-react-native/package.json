@@ -1,6 +1,6 @@
 {
   "name": "@didww/verification-react-native",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "React Native bindings for the DIDWW Verification API.",
   "license": "MIT",
   "repository": {

@@ -4,6 +4,12 @@ Notable changes to `@didww/verification-react-native`.
 
 This package follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 1.1.1 — 2026-10
+
+- Kept in step with `@didww/verification-core` 1.1.1, which removes the `stale_dispatch` code; the
+  API now reports these failures as `dispatch_failed`. No change to this package's own code.
+- Docs: `stale_dispatch` dropped from the codes worth translating for your users.
+
 ## 1.1.0 — 2026-10
 
 - Kept in step with `@didww/verification-core` 1.1.0 (`SmsInfo.codeLength`/`CalloutInfo.codeLength`,

@@ -5,6 +5,13 @@ Notable changes to `@didww/verification-core`.
 This package follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Two names are excluded from semver and may change in any release:
 `Verification.unsafeRawPayload` and `INTERNAL_APP_HASH_KEY`.
 
+## 1.1.1 — 2026-10
+
+- Removed `'stale_dispatch'` from `API_ERROR_CODES` and `VERIFICATION_ERROR_CODES`; the API now
+  reports these failures as `'dispatch_failed'`. A response that still carries the old code decodes
+  as an unknown code, as before for any code this release does not model.
+- Docs: a Testing section on the sandbox environment and its reserved test numbers.
+
 ## 1.1.0 — 2026-10
 
 - `SmsInfo.codeLength` and `CalloutInfo.codeLength` — the generated code's length, 4–8, set per

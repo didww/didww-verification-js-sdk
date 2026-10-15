@@ -17,7 +17,6 @@ export const VERIFICATION_ERROR_CODES = [
   'dispatch_failed',
   'expired',
   'too_many_attempts',
-  'stale_dispatch',
   'application_deleted',
   'superseded',
   'denied_missing_callback_url',

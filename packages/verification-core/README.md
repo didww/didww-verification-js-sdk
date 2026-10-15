@@ -310,11 +310,10 @@ try {
 }
 ```
 
-Three outcome codes read oddly on the wire and are worth translating for your users:
+Two outcome codes read oddly on the wire and are worth translating for your users:
 
 | Code                  | What happened                                                                                 |
 | --------------------- | --------------------------------------------------------------------------------------------- |
-| `stale_dispatch`      | the dispatch could not be completed in time                                                   |
 | `superseded`          | replaced by a newer verification for the same number                                          |
 | `application_deleted` | the application record this verification belonged to was removed while it was still in flight |
 
