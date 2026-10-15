@@ -199,8 +199,8 @@ size. On `{ ok: true }` the payload carries `event`, the `key` the request authe
 While an application's secret is being rotated, the API signs each callback twice: `Authorization`
 carries the signature made with the new secret, and an extra `x-signature-previous` header carries
 the bare signature made with the previous one. The verifier accepts a callback when either
-signature matches the secret you configured, so you can switch to the new secret at any point in
-the grace period, before or after the API starts signing with it. The header is read by
+signature matches the secret you configured, so you can switch to the new secret at any point
+during the grace period. The header is read by
 `expressCallbackHandler` automatically; with `CallbackVerifier` directly, pass it as
 `previousSignature`. Without the header nothing changes. Upgrade to this version before you
 rotate the secret: an older verifier reads only `Authorization`, so a receiver that still holds the
