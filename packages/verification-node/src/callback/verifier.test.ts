@@ -119,6 +119,126 @@ describe('CallbackVerifier accepting a callback', () => {
   });
 });
 
+describe('CallbackVerifier during a secret rotation', () => {
+  const NEW_SECRET = 'nEw_rotated_secret_urlsafe_value_AA';
+  const THIRD_SECRET = 'tHiRd_unrelated_secret_value_AAA';
+
+  function signatureWith(secret: string, parts: Parts = {}): string {
+    return new Signer(secret).sign({
+      method: parts.method ?? 'POST',
+      path: parts.path ?? PATH,
+      contentType: parts.contentType ?? 'application/json',
+      body: parts.body ?? BODY,
+      timestamp: parts.timestamp ?? String(NOW_SECONDS),
+    });
+  }
+
+  it('accepts the Authorization signature, as the receiver of the new secret', async () => {
+    const receiver = new CallbackVerifier({ secret: NEW_SECRET, clock });
+    const request = signed({}, { secret: NEW_SECRET });
+
+    const result = await receiver.verify({
+      ...request,
+      previousSignature: signatureWith(SECRET),
+    });
+
+    expect(result.ok).toBe(true);
+  });
+
+  it('accepts the previous signature when the receiver still holds the old secret', async () => {
+    const request = signed({}, { secret: NEW_SECRET });
+
+    const result = await fixed.verify({
+      ...request,
+      previousSignature: signatureWith(SECRET),
+    });
+
+    expect(result.ok).toBe(true);
+  });
+
+  it('accepts the previous signature through a secret resolver', async () => {
+    const request = signed({}, { secret: NEW_SECRET });
+
+    const result = await resolving.verify({
+      ...request,
+      previousSignature: signatureWith(SECRET),
+    });
+
+    expect(result.ok).toBe(true);
+  });
+
+  it('rejects when neither signature matches the configured secret', async () => {
+    const request = signed({}, { secret: NEW_SECRET });
+
+    const result = await fixed.verify({
+      ...request,
+      previousSignature: signatureWith(THIRD_SECRET),
+    });
+
+    expect(result).toEqual({ ok: false, reason: 'signature_mismatch', key: KEY });
+  });
+
+  it('rejects a previous signature computed over a different body', async () => {
+    const request = signed({}, { secret: NEW_SECRET });
+
+    const result = await fixed.verify({
+      ...request,
+      previousSignature: signatureWith(SECRET, { body: '{}' }),
+    });
+
+    expect(result).toEqual({ ok: false, reason: 'signature_mismatch', key: KEY });
+  });
+
+  it.each([
+    ['absent', undefined],
+    ['null', null],
+    ['empty', ''],
+  ])('behaves as before when the previous signature is %s', async (_label, previousSignature) => {
+    const accepted = await fixed.verify({ ...signed(), previousSignature });
+    const rejected = await fixed.verify({
+      ...signed({}, { secret: NEW_SECRET }),
+      previousSignature,
+    });
+
+    expect(accepted.ok).toBe(true);
+    expect(rejected).toEqual({ ok: false, reason: 'signature_mismatch', key: KEY });
+  });
+
+  it('does not let a previous signature bypass the timestamp window', async () => {
+    const stale = String(NOW_SECONDS - 3600);
+    const request = signed({ timestamp: stale }, { secret: NEW_SECRET });
+
+    const result = await fixed.verify({
+      ...request,
+      previousSignature: signatureWith(SECRET, { timestamp: stale }),
+    });
+
+    expect(result).toEqual({ ok: false, reason: 'timestamp_out_of_window', key: KEY });
+  });
+
+  it('still requires an Authorization signature', async () => {
+    const result = await fixed.verify({
+      ...signed(),
+      authorization: `Application ${KEY}`,
+      previousSignature: signatureWith(SECRET),
+    });
+
+    expect(result).toEqual({ ok: false, reason: 'missing_signature', key: KEY });
+  });
+
+  it('compares raw base64 text, so a padding-only variation is not accepted', async () => {
+    const request = signed({}, { secret: NEW_SECRET });
+    const exact = signatureWith(SECRET);
+
+    const result = await fixed.verify({
+      ...request,
+      previousSignature: exact.replace(/=+$/, ''),
+    });
+
+    expect(result).toEqual({ ok: false, reason: 'signature_mismatch', key: KEY });
+  });
+});
+
 describe('CallbackVerifier timestamp window', () => {
   it.each([
     ['300 seconds in the past', NOW_SECONDS - 300],

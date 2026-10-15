@@ -59,6 +59,7 @@ POST <registered callback URL>
 Content-Type: application/json
 Authorization: Application <key>:<signature>
 x-timestamp: <unix epoch seconds>
+x-signature-previous: <signature>        (only during a secret rotation)
 
 {"event":"verification_request","data":{"id":"…","destination":"…","delivery_method":"sms"}}
 ```
@@ -137,6 +138,32 @@ x-timestamp:<TIMESTAMP>
 
 `Signer#stringToSign` is public so a production mismatch can be diffed against the server line by
 line.
+
+## Secret rotation
+
+An application's secret can be rotated with a grace period, during which the old secret, the
+_previous_ secret, stays valid. While one is active, every callback carries an extra header:
+
+```
+x-signature-previous: <signature>
+```
+
+It is the bare base64 signature, with no `Application`, no key and no colon, computed over the same
+string to sign and the same `x-timestamp` as `Authorization`, but with the previous secret as the
+HMAC key. `Authorization` is unchanged and is always made with the current secret.
+
+The verifier computes the expected signature once, with the secret you configured, and accepts the
+callback when it equals the `Authorization` signature **or** the `x-signature-previous` value. A
+receiver therefore keeps working whichever secret it holds during the grace period, and can switch
+to the new one at any time. Both comparisons are constant-time over the raw base64 text, the
+timestamp window applies as usual, and `Authorization` must still be present and well formed. When
+the header is absent, verification is exactly what it was before.
+
+`expressCallbackHandler` reads the header for you. With `CallbackVerifier.verify`, pass its value as
+`previousSignature`.
+
+Once you have deployed the new secret, nothing else needs to change; when the grace period ends the
+header stops arriving.
 
 ## Rejection
 

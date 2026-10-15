@@ -227,6 +227,37 @@ describe('expressCallbackHandler decisions', () => {
   });
 });
 
+describe('expressCallbackHandler during a secret rotation', () => {
+  const NEW_SECRET = 'nEw_rotated_secret_urlsafe_value_AA';
+
+  function rotated(): { wire: Wire; previous: string } {
+    const wire = signedFor({ path: PATH, secret: NEW_SECRET });
+    const previous = signedFor({ path: PATH, timestamp: Number(wire.timestamp) }).authorization;
+    return { wire, previous: previous.slice(previous.indexOf(':') + 1) };
+  }
+
+  it('accepts x-signature-previous when the receiver still holds the old secret', async () => {
+    const decide = vi.fn(() => ({ action: 'allow' as const }));
+    const app = serve({ secret: SECRET, path: PATH, decide });
+    const { wire, previous } = rotated();
+
+    const response = await send(app, PATH, wire).set('x-signature-previous', previous);
+
+    expect(response.status).toBe(200);
+    expect(decide).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects the same callback without the header', async () => {
+    const onRejected = vi.fn();
+    const app = serve({ secret: SECRET, path: PATH, decide: allow, onRejected });
+
+    const response = await send(app, PATH, rotated().wire);
+
+    expect(response.status).toBe(401);
+    expect(onRejected).toHaveBeenCalledWith('signature_mismatch', expect.anything());
+  });
+});
+
 describe('expressCallbackHandler path candidates', () => {
   it('accepts a bare-origin registration, signed against the empty path', async () => {
     const onRejected = vi.fn();

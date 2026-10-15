@@ -4,6 +4,14 @@ Notable changes to `@didww/verification-node`.
 
 This package follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+- `CallbackVerifier` and `expressCallbackHandler` accept the `x-signature-previous` header that the
+  API sends while an application secret is being rotated. A callback verifies when either the
+  `Authorization` signature or `x-signature-previous` matches the configured secret, so a receiver
+  can switch to the new secret at any point in the grace period. `CallbackVerifyInput` gains an
+  optional `previousSignature`. A callback without the header verifies exactly as before.
+
 ## 1.1.0 — 2026-10
 
 - Kept in step with `@didww/verification-core` 1.1.0 (`SmsInfo.codeLength`/`CalloutInfo.codeLength`,
