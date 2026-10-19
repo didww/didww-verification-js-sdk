@@ -90,7 +90,7 @@ function submitRetryDelayMs(error: unknown): number | null {
     return null;
   }
   const seconds = (error as RateLimitedError).retryAfterSeconds ?? 1;
-  return Math.min(seconds, MAX_SUBMIT_RETRY_WAIT_SECONDS) * 1000;
+  return seconds <= MAX_SUBMIT_RETRY_WAIT_SECONDS ? seconds * 1000 : null;
 }
 
 // Past the 32-bit range a timer fires immediately rather than never, which would disarm at once.

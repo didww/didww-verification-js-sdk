@@ -20,8 +20,8 @@ This package follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Changed
 
 - A submit refused with `rate_limit_per_ip`, `rate_limit_failed_auth`, `rate_limit_per_account` or
-  `rate_limit_public_per_account` is retried once after `Retry-After` (capped at 5 seconds). If the
-  retry is rate-limited too, the state returns to `awaitingInput` with the error in `lastError`
+  `rate_limit_public_per_account` is retried once after `Retry-After` when that is at most 5
+  seconds. If the wait is longer, or the retry is rate-limited too, the state returns to `awaitingInput` with the error in `lastError`
   rather than ending the verification. A rate-limited start, and `volume_limit_reached`, stay
   terminal.
 - A start answered with outcome `application_paused` ends in `setupError`, and one answered with

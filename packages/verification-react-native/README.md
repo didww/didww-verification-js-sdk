@@ -170,9 +170,9 @@ the verification stays alive for another attempt:
 `delivery_method_invalid`, `validation_failed`, `not_ready_to_report`, `rate_limit_per_ip`,
 `rate_limit_failed_auth`, `rate_limit_per_account`, `rate_limit_public_per_account`.
 
-A submit refused with one of the four `rate_limit_*` codes is first retried once on its own, after
-`Retry-After` (the wait is capped at 5 seconds). Only when that retry is rate-limited too does it
-return to `awaitingInput`, so the user can submit again. `volume_limit_reached` is not retried.
+A submit refused with one of the four `rate_limit_*` codes is retried once on its own after
+`Retry-After` when that is at most 5 seconds. A longer `Retry-After`, or a retry that is
+rate-limited too, returns to `awaitingInput`, so the user can submit again. `volume_limit_reached` is not retried.
 
 Everything else is terminal. Two absences are deliberate:
 

@@ -758,18 +758,40 @@ describe('useVerification: rate-limited submit', () => {
     expect(controllerOf(box).state.kind).toBe('verified');
   });
 
-  it('caps the wait at five seconds', async () => {
+  it('waits the full Retry-After when it is at most five seconds', async () => {
     const { requests, box } = await submitAfterStart([
-      rateLimited('rate_limit_per_account', '3600'),
+      rateLimited('rate_limit_per_account', '5'),
       ok(verificationBody({ status: 'verified' })),
     ]);
 
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(5_000);
+      await vi.advanceTimersByTimeAsync(4_999);
     });
+    expect(requests).toHaveLength(2);
 
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1);
+    });
     expect(requests).toHaveLength(3);
     expect(controllerOf(box).state.kind).toBe('verified');
+  });
+
+  it('does not retry when Retry-After is longer than five seconds, and stays recoverable', async () => {
+    const { requests, box } = await submitAfterStart([
+      rateLimited('rate_limit_per_account', '6'),
+      ok(verificationBody({ status: 'verified' })),
+    ]);
+
+    const state = controllerOf(box).state;
+    expect(state.kind).toBe('awaitingInput');
+    if (state.kind === 'awaitingInput') {
+      expect(state.lastError).toEqual({ code: 'rate_limit_per_account', detail: 'prose' });
+    }
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10_000);
+    });
+    expect(requests).toHaveLength(2);
   });
 
   it('keeps the verification alive when the retry is rate-limited again', async () => {
