@@ -110,6 +110,7 @@ export function expressCallbackHandler(options: ExpressCallbackHandlerOptions): 
         body: rawBody(req.body),
         timestamp: header(req, 'x-timestamp'),
         authorization: header(req, 'authorization'),
+        previousSignature: header(req, 'x-signature-previous'),
       };
 
       const [primary, alternate] = pathCandidates(options.path, req.originalUrl);

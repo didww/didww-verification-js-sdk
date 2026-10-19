@@ -31,6 +31,14 @@ export type VerificationEvent =
 
 export const initialMachineState: MachineState = { state: { kind: 'idle' }, active: null };
 
+/** API rate limits. A submit that hits one is retried once after `Retry-After`, then recoverable. */
+export const RATE_LIMIT_ERROR_CODES = [
+  'rate_limit_per_ip',
+  'rate_limit_failed_auth',
+  'rate_limit_per_account',
+  'rate_limit_public_per_account',
+] as const satisfies readonly KnownApiErrorCode[];
+
 /**
  * The server decides whether another attempt is allowed, so there is no local counter and
  * `too_many_attempts` is absent. `already_verified` too: the row succeeded earlier but this
@@ -46,6 +54,7 @@ const RECOVERABLE_ERROR_CODES = [
   'delivery_method_invalid',
   'validation_failed',
   'not_ready_to_report',
+  ...RATE_LIMIT_ERROR_CODES,
 ] as const satisfies readonly KnownApiErrorCode[];
 
 const TERMINAL_KINDS: readonly VerificationState['kind'][] = [
@@ -68,9 +77,11 @@ function isRecoverable(code: string): boolean {
 function terminalForErrorItem(item: ApiErrorItem): VerificationState {
   switch (item.code) {
     case 'denied_missing_callback_url':
-      return { kind: 'setupError', code: 'denied_missing_callback_url', detail: item.detail };
+    case 'application_paused':
+      return { kind: 'setupError', code: item.code, detail: item.detail };
     case 'denied_by_callback':
     case 'denied_invalid_callback_response':
+    case 'destination_country_disabled':
       return { kind: 'denied', error: item };
     case 'expired':
       return { kind: 'expired' };

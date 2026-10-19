@@ -42,6 +42,11 @@ export interface CallbackVerifyInput {
   readonly body: string;
   readonly timestamp: string | null | undefined;
   readonly authorization: string | null | undefined;
+  /**
+   * The `x-signature-previous` header: sent during a secret rotation, signed with the previous
+   * secret. Absent outside a rotation, and then ignored.
+   */
+  readonly previousSignature?: string | null | undefined;
 }
 
 const DEFAULT_TOLERANCE_SECONDS = 300;
@@ -102,7 +107,10 @@ export class CallbackVerifier {
       // The received string verbatim: it is what the sender signed, not a number we re-render.
       timestamp,
     });
-    if (!constantTimeEquals(expected, signature)) return rejected('signature_mismatch', key);
+    // Both comparisons always run, so the time taken does not reveal which header matched.
+    const current = constantTimeEquals(expected, signature);
+    const previous = constantTimeEquals(expected, input.previousSignature);
+    if (!current && !previous) return rejected('signature_mismatch', key);
 
     const payload = parseCallbackPayload(input.body, key);
     if (payload === null) return rejected('unparseable_body', key);

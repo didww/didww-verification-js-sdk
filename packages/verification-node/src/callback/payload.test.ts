@@ -27,8 +27,8 @@ describe('bodyByteLength', () => {
     expect(bodyByteLength(mixed)).toBe(Buffer.from(mixed, 'utf8').length);
   });
 
-  it('defaults the cap to 8 KiB', () => {
-    expect(DEFAULT_MAX_BODY_BYTES).toBe(8192);
+  it('defaults the cap to 32 KiB', () => {
+    expect(DEFAULT_MAX_BODY_BYTES).toBe(32768);
   });
 });
 
@@ -41,6 +41,7 @@ describe('parseCallbackPayload', () => {
         id: '01920a7b-0000-7000-8000-000000000001',
         destination: '12025550143',
         deliveryMethod: 'sms',
+        custom: null,
       },
     });
   });
@@ -56,7 +57,7 @@ describe('parseCallbackPayload', () => {
     expect(parseCallbackPayload(body, KEY)).toEqual({
       event: 'verification_review',
       key: KEY,
-      data: { id: 'id', destination: '12025550143', deliveryMethod: 'whatsapp' },
+      data: { id: 'id', destination: '12025550143', deliveryMethod: 'whatsapp', custom: null },
     });
   });
 
@@ -71,7 +72,30 @@ describe('parseCallbackPayload', () => {
       id: 'id',
       destination: '1',
       deliveryMethod: 'sms',
+      custom: null,
     });
+  });
+
+  it('carries custom through as the string received', () => {
+    const body = JSON.stringify({
+      event: 'verification_request',
+      data: { id: 'i', destination: '1', delivery_method: 'sms', custom: 'order-42 \u00e9' },
+    });
+
+    expect(parseCallbackPayload(body, KEY)?.data.custom).toBe('order-42 \u00e9');
+  });
+
+  it.each([
+    ['null', null],
+    ['a number', 7],
+    ['an object', { a: 1 }],
+  ])('reads custom as null when it is %s', (_label, custom) => {
+    const body = JSON.stringify({
+      event: 'verification_request',
+      data: { id: 'i', destination: '1', delivery_method: 'sms', custom },
+    });
+
+    expect(parseCallbackPayload(body, KEY)?.data.custom).toBeNull();
   });
 
   it.each([

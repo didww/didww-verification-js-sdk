@@ -59,13 +59,18 @@ POST <registered callback URL>
 Content-Type: application/json
 Authorization: Application <key>:<signature>
 x-timestamp: <unix epoch seconds>
+x-signature-previous: <signature>        (only during a secret rotation)
 
-{"event":"verification_request","data":{"id":"…","destination":"…","delivery_method":"sms"}}
+{"event":"verification_request","data":{"id":"…","destination":"…","delivery_method":"sms","custom":"…"}}
 ```
 
 `destination` arrives as digits with no `+`. `delivery_method` is `sms` or `callout` for the
 channels this release models; any other value passes through as the string received rather than
 failing the parse.
+
+`custom` is the text the start request carried in its own `custom` field, unchanged; the key is
+absent when none was sent, and the parser reads that as `null`. It is client-supplied whenever the
+start came from a device, so check it against your own records instead of trusting it.
 
 ## The signed path, and the empty string
 
@@ -138,6 +143,32 @@ x-timestamp:<TIMESTAMP>
 `Signer#stringToSign` is public so a production mismatch can be diffed against the server line by
 line.
 
+## Secret rotation
+
+An application's secret can be rotated with a grace period, during which the old secret, the
+_previous_ secret, stays valid. While one is active, every callback carries an extra header:
+
+```
+x-signature-previous: <signature>
+```
+
+It is the bare base64 signature, with no `Application`, no key and no colon, computed over the same
+string to sign and the same `x-timestamp` as `Authorization`, but with the previous secret as the
+HMAC key. `Authorization` is unchanged and is always made with the current secret.
+
+The verifier computes the expected signature once, with the secret you configured, and accepts the
+callback when it equals the `Authorization` signature **or** the `x-signature-previous` value. A
+receiver therefore keeps working whichever secret it holds during the grace period, and can switch
+to the new one at any time. Both comparisons are constant-time over the raw base64 text, the
+timestamp window applies as usual, and `Authorization` must still be present and well formed. When
+the header is absent, verification is exactly what it was before.
+
+`expressCallbackHandler` reads the header for you. With `CallbackVerifier.verify`, pass its value as
+`previousSignature`.
+
+Once you have deployed the new secret, nothing else needs to change; when the grace period ends the
+header stops arriving.
+
 ## Rejection
 
 `CallbackVerifier.verify` returns `{ ok: false, reason, key }`. The order is fixed, and each
@@ -148,7 +179,7 @@ error.
 
 | Reason                    | Status | Means                                                      |
 | ------------------------- | ------ | ---------------------------------------------------------- |
-| `body_too_large`          | 400    | over `maxBodyBytes` (8192 by default)                      |
+| `body_too_large`          | 400    | over `maxBodyBytes` (32768 by default)                     |
 | `missing_signature`       | 401    | no `Authorization`, or not `Application <key>:<signature>` |
 | `missing_timestamp`       | 401    | no `x-timestamp`, or blank                                 |
 | `timestamp_out_of_window` | 401    | outside the tolerance, or not Unix seconds                 |
@@ -156,9 +187,10 @@ error.
 | `signature_mismatch`      | 401    | the HMAC differs — most often the path                     |
 | `unparseable_body`        | 400    | signature held, envelope malformed                         |
 
-`maxBodyBytes` is the SDK's own bound on unauthenticated work and mirrors no server-side limit. The
-API's own 8192-byte cap, below, applies to the answer it reads back from you. The two happen to
-share a default; raising one does nothing to the other.
+`maxBodyBytes` is the SDK's own bound on unauthenticated work and mirrors no server-side limit; its
+default leaves room for a 4096-character `custom`, which escaped JSON can grow to about 25 KB. The
+API's own 8192-byte cap, below, applies to the answer it reads back from you; raising one does
+nothing to the other.
 
 **The reason is never echoed in the response body.** The adapter answers a bare status.
 `unknown_key` is decided _before_ the signature is checked — it has to be, since the key selects the

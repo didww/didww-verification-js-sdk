@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   API_ERROR_CODES,
+  VERIFICATION_ERROR_CODES,
   isKnownApiErrorCode,
   type KnownApiErrorCode,
   type VerificationStatus,
@@ -49,5 +50,41 @@ describe('isKnownApiErrorCode', () => {
 
   it.each(['carrier_pigeon', '', 'Unauthorized', 'toString'])('is false for %j', (value) => {
     expect(isKnownApiErrorCode(value)).toBe(false);
+  });
+});
+
+describe('API_ERROR_CODES', () => {
+  it.each([
+    'custom_too_long',
+    'autofill_invalid',
+    'sms_domain_not_configured',
+    'template_group_not_found',
+    'rate_limit_per_ip',
+    'rate_limit_failed_auth',
+    'rate_limit_per_account',
+    'rate_limit_public_per_account',
+    'volume_limit_reached',
+  ])('lists %s', (code) => {
+    expect(isKnownApiErrorCode(code)).toBe(true);
+  });
+
+  it('lists autofill_invalid right before app_hash_invalid', () => {
+    const at = API_ERROR_CODES.indexOf('app_hash_invalid');
+
+    expect(API_ERROR_CODES[at - 1]).toBe('autofill_invalid');
+  });
+});
+
+describe('VERIFICATION_ERROR_CODES', () => {
+  it.each([
+    'application_paused',
+    'destination_country_disabled',
+    'destination_not_supported_for_channel',
+  ])('lists the outcome %s', (code) => {
+    expect(VERIFICATION_ERROR_CODES).toContain(code);
+  });
+
+  it('keeps the deprecated stale_dispatch', () => {
+    expect(VERIFICATION_ERROR_CODES).toContain('stale_dispatch');
   });
 });

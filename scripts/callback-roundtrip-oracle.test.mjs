@@ -87,7 +87,12 @@ describe('CallbackVerifier against callbacks the API actually signs and sends', 
       payload: {
         event: 'verification_request',
         key: KEY,
-        data: { id: expect.any(String), destination: '15551234567', deliveryMethod: 'sms' },
+        data: {
+          id: expect.any(String),
+          destination: '15551234567',
+          deliveryMethod: 'sms',
+          custom: null,
+        },
       },
     });
   });

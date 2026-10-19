@@ -12,6 +12,7 @@ interface WireContract {
   paths: Record<string, unknown>;
   constraints: {
     appHash: { pattern: string };
+    custom: { maxLength: number };
     languageTag: { acceptedPattern: string; canonicalization: string; fallback: string };
     generatedCodeLength: { min: number; max: number; default: number };
     verificationLifetimeSeconds: { min: number; max: number; default: number };
@@ -52,7 +53,11 @@ export const CODE = {
   deliveryMethodInclusion: member(API_ERROR_CODES, 'API_ERROR_CODES', 'delivery_method_inclusion'),
   deliveryMethodInvalid: member(API_ERROR_CODES, 'API_ERROR_CODES', 'delivery_method_invalid'),
   languagesInvalid: member(API_ERROR_CODES, 'API_ERROR_CODES', 'languages_invalid'),
+  autofillInvalid: member(API_ERROR_CODES, 'API_ERROR_CODES', 'autofill_invalid'),
   appHashInvalid: member(API_ERROR_CODES, 'API_ERROR_CODES', 'app_hash_invalid'),
+  smsDomainNotConfigured: member(API_ERROR_CODES, 'API_ERROR_CODES', 'sms_domain_not_configured'),
+  templateGroupNotFound: member(API_ERROR_CODES, 'API_ERROR_CODES', 'template_group_not_found'),
+  customTooLong: member(API_ERROR_CODES, 'API_ERROR_CODES', 'custom_too_long'),
   codeBlank: member(API_ERROR_CODES, 'API_ERROR_CODES', 'code_blank'),
   codeValuePresent: member(API_ERROR_CODES, 'API_ERROR_CODES', 'code_value_present'),
   cliBlank: member(API_ERROR_CODES, 'API_ERROR_CODES', 'cli_blank'),
@@ -100,6 +105,7 @@ export function isDeliveryMethod(value: string): boolean {
 }
 
 export const APP_HASH_PATTERN = new RegExp(contract.constraints.appHash.pattern);
+export const CUSTOM_MAX_LENGTH = contract.constraints.custom.maxLength;
 export const LANGUAGE_TAG_PATTERN = new RegExp(contract.constraints.languageTag.acceptedPattern);
 export const LANGUAGE_TAG_FALLBACK = contract.constraints.languageTag.fallback;
 export const GENERATED_CODE_LENGTH = contract.constraints.generatedCodeLength.default;
@@ -124,7 +130,11 @@ const ERROR_DETAILS: Record<string, string> = {
   [CODE.deliveryMethodInclusion]: 'Delivery method is not supported.',
   [CODE.deliveryMethodInvalid]: 'Delivery method does not match the verification.',
   [CODE.languagesInvalid]: 'Languages are not valid language tags.',
+  [CODE.autofillInvalid]: 'Autofill is not a valid autofill marker.',
   [CODE.appHashInvalid]: 'App hash is not a valid application hash.',
+  [CODE.smsDomainNotConfigured]: 'The application has no SMS domain configured.',
+  [CODE.templateGroupNotFound]: 'Template group was not found.',
+  [CODE.customTooLong]: 'Custom is too long.',
   [CODE.codeBlank]: 'Code is required.',
   [CODE.codeValuePresent]: 'Code must not be sent for this delivery method.',
   [CODE.cliBlank]: 'CLI is required.',
@@ -359,6 +369,12 @@ export function viewOf(row: VerificationRow, at: number): VerificationView {
   return { status: row.status, errorCode: row.errorCode };
 }
 
+const NO_TEMPLATE_GROUP = {
+  template_group: null,
+  template_group_used: false,
+  template_fallback_reason: null,
+};
+
 export function renderVerification(row: VerificationRow, at: number): Record<string, unknown> {
   const view = viewOf(row, at);
   const body: Record<string, unknown> = {
@@ -377,13 +393,17 @@ export function renderVerification(row: VerificationRow, at: number): Record<str
       language: row.language,
       interception_timeout: row.lifetimeSeconds,
       code_length: row.codeLength,
+      ...NO_TEMPLATE_GROUP,
     };
-    // The key is omitted entirely unless a hash was stored on this verification.
-    if (row.appHash !== null) sms.app_hash = row.appHash;
+    // Both keys are omitted entirely unless a hash was stored on this verification.
+    if (row.appHash !== null) {
+      sms.autofill = { type: 'app_hash', value: row.appHash };
+      sms.app_hash = row.appHash;
+    }
     body.sms = sms;
   }
   if (row.deliveryMethod === METHOD.callout) {
-    body.callout = { language: row.language, code_length: row.codeLength };
+    body.callout = { language: row.language, code_length: row.codeLength, ...NO_TEMPLATE_GROUP };
   }
   return body;
 }

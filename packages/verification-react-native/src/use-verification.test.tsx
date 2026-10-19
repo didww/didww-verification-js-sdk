@@ -45,7 +45,11 @@ function verificationBody(overrides: Record<string, unknown> = {}): string {
       error_code: null,
       error_detail: null,
       expires_at: inMinutes(10),
-      sms: { template: TEMPLATE, interception_timeout: 600, app_hash: APP_HASH },
+      sms: {
+        template: TEMPLATE,
+        interception_timeout: 600,
+        autofill: { type: 'app_hash', value: APP_HASH },
+      },
       ...overrides,
     },
   });
@@ -61,6 +65,10 @@ function ok(body: string): HttpResponse {
 
 function rejected(status: number, body: string): HttpResponse {
   return { status, headers: {}, body };
+}
+
+function rateLimited(code: string, retryAfter = '1'): HttpResponse {
+  return { status: 429, headers: { 'Retry-After': retryAfter }, body: errorBody(code) };
 }
 
 type ScriptEntry = HttpResponse | ((request: HttpRequest) => HttpResponse);
@@ -238,6 +246,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   cleanup();
   nativeState.module = null;
   vi.restoreAllMocks();
@@ -705,6 +714,124 @@ describe('useVerification: submitting', () => {
   });
 });
 
+describe('useVerification: rate-limited submit', () => {
+  async function submitAfterStart(
+    script: readonly ScriptEntry[],
+  ): Promise<{ requests: readonly HttpRequest[]; box: Box }> {
+    const { transport, requests } = fakeTransport([ok(verificationBody()), ...script]);
+    const box: Box = { controller: null };
+    render(<Host client={clientFor(transport)} box={box} startOnMount={SMS_START} />);
+    await flush();
+    vi.useFakeTimers();
+    await act(async () => {
+      controllerOf(box).submit('123456');
+    });
+    return { requests, box };
+  }
+
+  it.each([
+    'rate_limit_per_ip',
+    'rate_limit_failed_auth',
+    'rate_limit_per_account',
+    'rate_limit_public_per_account',
+  ])('retries once after Retry-After on %s', async (code) => {
+    const { requests, box } = await submitAfterStart([
+      rateLimited(code),
+      ok(verificationBody({ status: 'verified' })),
+    ]);
+
+    expect(requests).toHaveLength(2);
+    expect(controllerOf(box).state.kind).toBe('submitting');
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(999);
+    });
+    expect(requests).toHaveLength(2);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1);
+    });
+    expect(requests).toHaveLength(3);
+    expect(decodedBody(requestAt(requests, 2))).toEqual({
+      data: { delivery_method: 'sms', code: '123456' },
+    });
+    expect(controllerOf(box).state.kind).toBe('verified');
+  });
+
+  it('caps the wait at five seconds', async () => {
+    const { requests, box } = await submitAfterStart([
+      rateLimited('rate_limit_per_account', '3600'),
+      ok(verificationBody({ status: 'verified' })),
+    ]);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5_000);
+    });
+
+    expect(requests).toHaveLength(3);
+    expect(controllerOf(box).state.kind).toBe('verified');
+  });
+
+  it('keeps the verification alive when the retry is rate-limited again', async () => {
+    const { requests, box } = await submitAfterStart([
+      rateLimited('rate_limit_per_ip'),
+      rateLimited('rate_limit_per_ip'),
+      ok(verificationBody({ status: 'verified' })),
+    ]);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1_000);
+    });
+
+    expect(requests).toHaveLength(3);
+    const state = controllerOf(box).state;
+    expect(state.kind).toBe('awaitingInput');
+    if (state.kind === 'awaitingInput') {
+      expect(state.lastError).toEqual({ code: 'rate_limit_per_ip', detail: 'prose' });
+    }
+
+    await act(async () => {
+      controllerOf(box).submit('123456');
+    });
+    expect(requests).toHaveLength(4);
+    expect(controllerOf(box).state.kind).toBe('verified');
+  });
+
+  it('does not retry after a reset during the wait', async () => {
+    const { requests, box } = await submitAfterStart([rateLimited('rate_limit_per_ip')]);
+
+    await act(async () => {
+      controllerOf(box).reset();
+      await vi.advanceTimersByTimeAsync(1_000);
+    });
+
+    expect(requests).toHaveLength(2);
+    expect(controllerOf(box).state.kind).toBe('idle');
+  });
+
+  it('does not retry volume_limit_reached', async () => {
+    const { requests, box } = await submitAfterStart([rateLimited('volume_limit_reached', '3600')]);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5_000);
+    });
+
+    expect(requests).toHaveLength(2);
+    expect(controllerOf(box).state.kind).toBe('failed');
+  });
+
+  it('leaves a rate-limited start terminal, without a retry', async () => {
+    const { transport, requests } = fakeTransport([rateLimited('rate_limit_per_ip')]);
+    const box: Box = { controller: null };
+
+    render(<Host client={clientFor(transport)} box={box} startOnMount={SMS_START} />);
+    await flush();
+
+    expect(requests).toHaveLength(1);
+    expect(controllerOf(box).state.kind).toBe('failed');
+  });
+});
+
 describe('useVerification: reattaching and resetting', () => {
   it('resumes the newest verification for a number', async () => {
     const { transport, requests } = fakeTransport([ok(verificationBody({ id: 'ver-9' }))]);
@@ -812,7 +939,7 @@ describe('useVerification: SMS auto-capture', () => {
       data: {
         destination: '+1 555 000 1111',
         delivery_method: 'sms',
-        sms: { app_hash: APP_HASH },
+        sms: { autofill: { type: 'app_hash', value: APP_HASH } },
       },
     });
     expect(native.start).toHaveBeenCalledTimes(1);
@@ -826,6 +953,66 @@ describe('useVerification: SMS auto-capture', () => {
     if (state.kind === 'captured') {
       expect(state.value).toBe('123456');
     }
+  });
+
+  it('does not arm when the echoed autofill carries a different hash', async () => {
+    const native = fakeNative();
+    nativeState.module = native.module;
+    const echo = { template: TEMPLATE, autofill: { type: 'app_hash', value: 'abcdEFGH+/1' } };
+    const { transport } = fakeTransport([ok(verificationBody({ sms: echo }))]);
+    const box: Box = { controller: null };
+
+    render(<Host client={clientFor(transport)} box={box} startOnMount={SMS_START} />);
+    await flush();
+
+    expect(native.hash).toHaveBeenCalledTimes(1);
+    expect(native.start).not.toHaveBeenCalled();
+  });
+
+  it('sends an explicit domain autofill as given and skips the device hash', async () => {
+    const native = fakeNative();
+    nativeState.module = native.module;
+    const echo = { template: TEMPLATE, autofill: { type: 'domain', value: 'example.com' } };
+    const { transport, requests } = fakeTransport([ok(verificationBody({ sms: echo }))]);
+    const box: Box = { controller: null };
+
+    render(
+      <Host
+        client={clientFor(transport)}
+        box={box}
+        startOnMount={{ ...SMS_START, sms: { autofill: { type: 'domain' } } }}
+      />,
+    );
+    await flush();
+
+    expect(native.hash).not.toHaveBeenCalled();
+    expect(decodedBody(requestAt(requests, 0))).toMatchObject({
+      data: { sms: { autofill: { type: 'domain' } } },
+    });
+    expect(native.start).not.toHaveBeenCalled();
+    expect(controllerOf(box).state.kind).toBe('awaitingInput');
+  });
+
+  it('arms on an explicit app_hash autofill without computing one', async () => {
+    const native = fakeNative();
+    nativeState.module = native.module;
+    const { transport, requests } = fakeTransport([ok(verificationBody())]);
+    const box: Box = { controller: null };
+
+    render(
+      <Host
+        client={clientFor(transport)}
+        box={box}
+        startOnMount={{ ...SMS_START, sms: { autofill: { type: 'app_hash', value: APP_HASH } } }}
+      />,
+    );
+    await flush();
+
+    expect(native.hash).not.toHaveBeenCalled();
+    expect(decodedBody(requestAt(requests, 0))).toMatchObject({
+      data: { sms: { autofill: { type: 'app_hash', value: APP_HASH } } },
+    });
+    expect(native.start).toHaveBeenCalledTimes(1);
   });
 
   it('disarms on a terminal outcome', async () => {
@@ -1020,6 +1207,23 @@ describe('useVerification: SMS auto-capture', () => {
         callout: { languages: ['pt-BR', 'pt-PT'] },
       },
     });
+  });
+
+  it('sends custom in the start body', async () => {
+    nativeState.module = fakeNative().module;
+    const { transport, requests } = fakeTransport([ok(verificationBody())]);
+    const box: Box = { controller: null };
+
+    render(
+      <Host
+        client={clientFor(transport)}
+        box={box}
+        startOnMount={{ ...SMS_START, custom: 'order-42' }}
+      />,
+    );
+    await flush();
+
+    expect(decodedBody(requestAt(requests, 0))).toMatchObject({ data: { custom: 'order-42' } });
   });
 
   it('starts the verification anyway when the device has no app hash', async () => {

@@ -5,6 +5,53 @@ Notable changes to `@didww/verification-core`.
 This package follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Two names are excluded from semver and may change in any release:
 `Verification.unsafeRawPayload` and `INTERNAL_APP_HASH_KEY`.
 
+## 1.2.0 — Unreleased
+
+### Added
+
+- `StartOptions.custom` — up to 4096 characters of text, forwarded unchanged to your callback server
+  as `data.custom`. It is not returned on the verification. A longer value is refused with the new
+  `custom_too_long` error code.
+- `SmsOptions.autofill` — `{ type: 'app_hash', value }`, `{ type: 'domain' }` or `{ type: 'none' }`
+  (`SmsAutofillOption`). `SmsInfo.autofill` reads back the stored marker, `app_hash` or `domain`,
+  whose `value` is the hash or the domain. New error codes `autofill_invalid` and
+  `sms_domain_not_configured`.
+- `templateGroup` on `SmsOptions` and `CalloutOptions`, to pick a template group instead of the
+  application's default. `SmsInfo` and `CalloutInfo` gain `templateGroup`, `templateGroupUsed` and
+  `templateFallbackReason`, the last an open vocabulary (`TEMPLATE_FALLBACK_REASONS`,
+  `TemplateFallbackReason`). `templateGroupUsed` false with a null reason means no group applies;
+  `group_missing` comes with a null `templateGroup`, as the group no longer exists. An unknown group
+  is refused with the new `template_group_not_found` error code.
+- New error codes for 429, all raising `RateLimitedError`: `rate_limit_per_ip` (too many requests
+  from this IP address), `rate_limit_failed_auth` (too many failed authentication attempts from this
+  IP address), `rate_limit_per_account` (too many requests for this account),
+  `rate_limit_public_per_account` (too many public requests for this account) and
+  `volume_limit_reached` (the application reached its daily or monthly verification limit for this
+  delivery method; `Retry-After` can be days, so surface it instead of retrying).
+- New outcome codes in `VERIFICATION_ERROR_CODES`: `application_paused` and
+  `destination_country_disabled` (status `denied`), and `destination_not_supported_for_channel`
+  (status `failed`).
+
+### Changed
+
+- An unsupported destination (no country, no delivery for the channel, or a blocked range) is no
+  longer refused with a 422. The start answers 201 with status `failed` and `errorCode`
+  `destination_not_supported_for_channel`, so code that caught the 422 now gets a failed
+  verification. The code stays in `API_ERROR_CODES` for compatibility.
+- `SmsInfo` gains four fields required by the type (`autofill`, `templateGroup`, `templateGroupUsed`,
+  `templateFallbackReason`) and `CalloutInfo` the last three: an object literal typed `SmsInfo`,
+  `CalloutInfo` or `Verification` — a test mock, most likely — now needs them added.
+- The device app hash handed over by `@didww/verification-react-native` is sent as
+  `sms.autofill`. Giving it together with `SmsOptions.autofill` throws `ConfigurationError`.
+
+### Deprecated
+
+- `SmsInfo.appHash` — use `SmsInfo.autofill`. It is `autofill.value` when the type is `app_hash`,
+  else `null`.
+- The `stale_dispatch` outcome code. The service no longer sends it and reports these
+  verifications as `dispatch_failed`. It stays in `VERIFICATION_ERROR_CODES` so existing matches
+  keep type-checking, and will be removed in the next major version.
+
 ## 1.1.0 — 2026-10
 
 - `SmsInfo.codeLength` and `CalloutInfo.codeLength` — the generated code's length, 4–8, set per

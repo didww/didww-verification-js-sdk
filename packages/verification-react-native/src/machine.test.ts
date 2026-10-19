@@ -17,17 +17,23 @@ const RECOVERABLE = [
   'delivery_method_invalid',
   'validation_failed',
   'not_ready_to_report',
+  'rate_limit_per_ip',
+  'rate_limit_failed_auth',
+  'rate_limit_per_account',
+  'rate_limit_public_per_account',
 ] as const satisfies readonly KnownApiErrorCode[];
 
 const TERMINAL_SLUGS = API_ERROR_CODES.filter(
   (code) => !(RECOVERABLE as readonly string[]).includes(code),
 );
 
-// The four slugs the terminal map treats specially; every other terminal slug becomes `failed`.
+// The slugs the terminal map treats specially; every other terminal slug becomes `failed`.
 const SPECIAL_TERMINAL: readonly string[] = [
   'denied_missing_callback_url',
+  'application_paused',
   'denied_by_callback',
   'denied_invalid_callback_response',
+  'destination_country_disabled',
   'expired',
 ];
 
@@ -46,8 +52,12 @@ const BASE: Omit<Verification, 'unsafeRawPayload'> = {
     template: 'Your code is {code}',
     language: 'en-US',
     interceptionTimeoutSeconds: 120,
+    autofill: { type: 'app_hash', value: 'FA+9qCX9VSu' },
     appHash: 'FA+9qCX9VSu',
     codeLength: 6,
+    templateGroup: null,
+    templateGroupUsed: false,
+    templateFallbackReason: null,
   },
   callout: null,
 };
@@ -118,7 +128,13 @@ describe('start', () => {
         verification: verification({
           deliveryMethod: 'callout',
           sms: null,
-          callout: { language: 'pt-PT', codeLength: 6 },
+          callout: {
+            language: 'pt-PT',
+            codeLength: 6,
+            templateGroup: null,
+            templateGroupUsed: false,
+            templateFallbackReason: null,
+          },
         }),
       },
     ]);
@@ -387,16 +403,57 @@ describe('status mapping', () => {
     });
   });
 
-  it.each(['denied_by_callback', 'denied_invalid_callback_response'])(
-    'denied with %s stays denied',
-    (code) => {
-      const next = verificationReducer(submitting(), {
-        type: 'submitSucceeded',
-        verification: verification({ status: 'denied', errorCode: code, errorDetail: null }),
-      });
-      expect(next.state).toEqual({ kind: 'denied', error: item(code, null) });
-    },
-  );
+  it('denied with application_paused is a setup error', () => {
+    const next = verificationReducer(
+      verificationReducer(initialMachineState, { type: 'startRequested' }),
+      {
+        type: 'startSucceeded',
+        verification: verification({
+          status: 'denied',
+          errorCode: 'application_paused',
+          errorDetail: 'paused',
+        }),
+      },
+    );
+    expect(next.state).toEqual({
+      kind: 'setupError',
+      code: 'application_paused',
+      detail: 'paused',
+    });
+  });
+
+  it('failed with destination_not_supported_for_channel stays failed', () => {
+    const next = verificationReducer(
+      verificationReducer(initialMachineState, { type: 'startRequested' }),
+      {
+        type: 'startSucceeded',
+        verification: verification({
+          status: 'failed',
+          errorCode: 'destination_not_supported_for_channel',
+          errorDetail: null,
+        }),
+      },
+    );
+    expect(next.state).toEqual({
+      kind: 'failed',
+      reason: {
+        source: 'api',
+        error: { code: 'destination_not_supported_for_channel', detail: null },
+      },
+    });
+  });
+
+  it.each([
+    'denied_by_callback',
+    'denied_invalid_callback_response',
+    'destination_country_disabled',
+  ])('denied with %s stays denied', (code) => {
+    const next = verificationReducer(submitting(), {
+      type: 'submitSucceeded',
+      verification: verification({ status: 'denied', errorCode: code, errorDetail: null }),
+    });
+    expect(next.state).toEqual({ kind: 'denied', error: item(code, null) });
+  });
 
   it('a successful report that is still pending returns to awaitingInput', () => {
     const next = verificationReducer(submitting(), {
@@ -548,8 +605,8 @@ describe('isTerminalState', () => {
 });
 
 describe('the partition covers the whole vocabulary', () => {
-  it('splits the known slugs 9 recoverable / 22 terminal', () => {
-    expect(RECOVERABLE).toHaveLength(9);
+  it('splits the known slugs 13 recoverable / the rest terminal', () => {
+    expect(RECOVERABLE).toHaveLength(13);
     expect(TERMINAL_SLUGS).toHaveLength(API_ERROR_CODES.length - RECOVERABLE.length);
   });
 });

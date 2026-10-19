@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 
 import {
   APP_HASH_PATTERN,
+  CUSTOM_MAX_LENGTH,
   CALLBACK_READ_LIMIT_BYTES,
   CALLBACK_RETRIES,
   CODE,
@@ -320,12 +321,25 @@ function blank(value: unknown): boolean {
   );
 }
 
+// As the API does: an app_hash marker carries exactly a string value, domain and none carry
+// nothing, and any other shape or type is malformed. The hash format is checked separately, for its
+// own slug.
+function isAutofill(
+  value: unknown,
+): value is { type: 'app_hash'; value: string } | { type: 'domain' } | { type: 'none' } {
+  if (!isPlainObject(value)) return false;
+  const keys = Object.keys(value).sort().join(',');
+  if (value.type === 'app_hash') return keys === 'type,value' && typeof value.value === 'string';
+  return (value.type === 'domain' || value.type === 'none') && keys === 'type';
+}
+
 interface StartRequest {
   destination: string;
   deliveryMethod: string;
   template: string | null;
   language: string | null;
   appHash: string | null;
+  custom: string | null;
 }
 
 function readStartRequest(data: Record<string, unknown>): StartRequest | string[] {
@@ -368,15 +382,45 @@ function readStartRequest(data: Record<string, unknown>): StartRequest | string[
   }
   const language = catalogue === undefined ? null : resolveLanguage(requested, catalogue);
 
-  // app_hash is permitted inside the sms block only; elsewhere the key is dropped, not rejected.
+  // autofill is read inside the sms block only; elsewhere the key is dropped, not rejected. A null
+  // one is the application default, which is no marker. The deprecated flat app_hash is read only
+  // when autofill is absent; sending both fails the request.
   let appHash: string | null = null;
-  const submittedHash = deliveryMethod === METHOD.sms ? options.app_hash : undefined;
-  if (submittedHash !== undefined) {
-    if (typeof submittedHash !== 'string' || !APP_HASH_PATTERN.test(submittedHash)) {
+  const autofill = deliveryMethod === METHOD.sms ? options.autofill : undefined;
+  const legacyHash = deliveryMethod === METHOD.sms ? options.app_hash : undefined;
+  const hasLegacy = legacyHash !== undefined && legacyHash !== null;
+  if (autofill !== undefined && autofill !== null) {
+    if (!isAutofill(autofill) || hasLegacy) {
+      errors.push(CODE.autofillInvalid);
+    } else if (autofill.type === 'app_hash') {
+      if (!APP_HASH_PATTERN.test(autofill.value)) errors.push(CODE.appHashInvalid);
+      else appHash = autofill.value;
+    } else if (autofill.type === 'domain') {
+      // No mock application has an SMS domain configured.
+      errors.push(CODE.smsDomainNotConfigured);
+    }
+  } else if (hasLegacy) {
+    if (typeof legacyHash !== 'string' || !APP_HASH_PATTERN.test(legacyHash)) {
       errors.push(CODE.appHashInvalid);
     } else {
-      appHash = submittedHash;
+      appHash = legacyHash;
     }
+  }
+
+  // No mock account has template groups, so any named one is unknown.
+  if (!blank(options.template_group)) errors.push(CODE.templateGroupNotFound);
+
+  // As the API does: numbers and booleans become their text, objects and arrays are dropped, and
+  // an empty string is absent. The length is counted in characters, not UTF-16 units.
+  let custom: string | null = null;
+  const rawCustom = data.custom;
+  const customText =
+    typeof rawCustom === 'string' || typeof rawCustom === 'number' || typeof rawCustom === 'boolean'
+      ? String(rawCustom)
+      : '';
+  if (customText !== '') {
+    if ([...customText].length > CUSTOM_MAX_LENGTH) errors.push(CODE.customTooLong);
+    else custom = customText;
   }
 
   if (errors.length > 0) return errors;
@@ -386,6 +430,7 @@ function readStartRequest(data: Record<string, unknown>): StartRequest | string[
     template: deliveryMethod === METHOD.sms && language !== null ? resolveTemplate(language) : null,
     language,
     appHash,
+    custom,
   };
 }
 
@@ -634,7 +679,12 @@ export function createMockApi(options: MockApiOptions = {}): MockApi {
       const decision = await decideStart(
         context.application,
         context.scheme,
-        { id, destination: parsed.destination, delivery_method: parsed.deliveryMethod },
+        {
+          id,
+          destination: parsed.destination,
+          delivery_method: parsed.deliveryMethod,
+          ...(parsed.custom === null ? {} : { custom: parsed.custom }),
+        },
         callbackTimeoutMs,
       );
       // The backend anchors the cooldown on the row's creation time, set once the callback has

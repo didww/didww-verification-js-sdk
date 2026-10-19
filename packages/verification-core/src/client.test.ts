@@ -33,8 +33,10 @@ const PAYLOAD = {
     template: 'Your code is {code}',
     language: 'en-US',
     interception_timeout: 120,
-    app_hash: null,
     code_length: 6,
+    template_group: null,
+    template_group_used: false,
+    template_fallback_reason: null,
   },
 };
 
@@ -515,7 +517,7 @@ describe('the app-hash gate', () => {
     expect(requests).toEqual([]);
   });
 
-  it('emits a well-formed hash as app_hash and never leaks the internal key', async () => {
+  it('emits a well-formed hash as an app_hash autofill and never leaks the internal key', async () => {
     const { client, requests } = setup([CREATED]);
     const sms: InternalSmsOptions = {
       languages: ['en-US', 'de-DE'],
@@ -527,8 +529,9 @@ describe('the app-hash gate', () => {
     const request = only(requests);
     expect(request.body).toBe(
       '{"data":{"destination":"+4915112345678","delivery_method":"sms",' +
-        '"sms":{"languages":["en-US","de-DE"],"app_hash":"abcdEFGH+/1"}}}',
+        '"sms":{"languages":["en-US","de-DE"],"autofill":{"type":"app_hash","value":"abcdEFGH+/1"}}}}',
     );
+    expect(request.body).not.toContain('"app_hash":');
     expect(request.body).not.toContain(INTERNAL_APP_HASH_KEY);
     expect(request.body).not.toContain('appHash');
   });
@@ -544,7 +547,74 @@ describe('the app-hash gate', () => {
   });
 });
 
+describe('the sms autofill', () => {
+  it.each([
+    [
+      { type: 'app_hash', value: VALID_APP_HASH },
+      `{"type":"app_hash","value":"${VALID_APP_HASH}"}`,
+    ],
+    [{ type: 'domain' }, '{"type":"domain"}'],
+    [{ type: 'none' }, '{"type":"none"}'],
+  ] as const)('sends %j inside the sms block', async (autofill, wire) => {
+    const { client, requests } = setup([CREATED]);
+    await client.startVerification({
+      destination: DESTINATION,
+      deliveryMethod: 'sms',
+      sms: { autofill },
+    });
+
+    expect(only(requests).body).toBe(
+      `{"data":{"destination":"+4915112345678","delivery_method":"sms","sms":{"autofill":${wire}}}}`,
+    );
+  });
+
+  it('refuses a malformed app_hash value before any request is issued', async () => {
+    const { client, requests } = setup([CREATED]);
+
+    await expect(
+      client.startVerification({
+        destination: DESTINATION,
+        deliveryMethod: 'sms',
+        sms: { autofill: { type: 'app_hash', value: 'too-short' } },
+      }),
+    ).rejects.toBeInstanceOf(ConfigurationError);
+    expect(requests).toEqual([]);
+  });
+
+  it('refuses an autofill together with the internal app hash', async () => {
+    const { client, requests } = setup([CREATED]);
+    const sms: InternalSmsOptions = {
+      autofill: { type: 'none' },
+      [INTERNAL_APP_HASH_KEY]: VALID_APP_HASH,
+    };
+
+    await expect(
+      client.startVerification({ destination: DESTINATION, deliveryMethod: 'sms', sms }),
+    ).rejects.toBeInstanceOf(ConfigurationError);
+    expect(requests).toEqual([]);
+  });
+});
+
 describe('the start body', () => {
+  it('sends template_group inside the sms and the callout block', async () => {
+    const { client, requests } = setup([CREATED, CREATED]);
+    await client.startVerification({
+      destination: DESTINATION,
+      deliveryMethod: 'sms',
+      sms: { templateGroup: 'checkout' },
+    });
+    await client.startVerification({
+      destination: DESTINATION,
+      deliveryMethod: 'callout',
+      callout: { templateGroup: 'checkout' },
+    });
+
+    expect(requests.map((request) => request.body)).toEqual([
+      '{"data":{"destination":"+4915112345678","delivery_method":"sms","sms":{"template_group":"checkout"}}}',
+      '{"data":{"destination":"+4915112345678","delivery_method":"callout","callout":{"template_group":"checkout"}}}',
+    ]);
+  });
+
   it('sends languages inside the sms block', async () => {
     const { client, requests } = setup([CREATED]);
     await client.startVerification({
@@ -556,6 +626,26 @@ describe('the start body', () => {
     expect(only(requests).body).toBe(
       '{"data":{"destination":"+4915112345678","delivery_method":"sms","sms":{"languages":["pl-PL"]}}}',
     );
+  });
+
+  it('sends custom as a top-level data key', async () => {
+    const { client, requests } = setup([CREATED]);
+    await client.startVerification({
+      destination: DESTINATION,
+      deliveryMethod: 'sms',
+      custom: 'order-42 \u00e9',
+    });
+
+    expect(JSON.parse(only(requests).body ?? '')).toEqual({
+      data: { destination: DESTINATION, delivery_method: 'sms', custom: 'order-42 \u00e9' },
+    });
+  });
+
+  it('omits custom when it is not given', async () => {
+    const { client, requests } = setup([CREATED]);
+    await client.startVerification({ destination: DESTINATION, deliveryMethod: 'sms' });
+
+    expect(only(requests).body).not.toContain('custom');
   });
 
   it('omits an empty sms block', async () => {
@@ -787,8 +877,12 @@ describe('responses', () => {
         template: 'Your code is {code}',
         language: 'en-US',
         interceptionTimeoutSeconds: 120,
+        autofill: null,
         appHash: null,
         codeLength: 6,
+        templateGroup: null,
+        templateGroupUsed: false,
+        templateFallbackReason: null,
       },
       callout: null,
     });

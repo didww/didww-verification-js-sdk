@@ -136,25 +136,26 @@ billable verification.
 
 ## Every state
 
-| `state.kind`    | Terminal | What to render                                                                                          |
-| --------------- | -------- | ------------------------------------------------------------------------------------------------------- |
-| `idle`          | no       | the "send me a code" affordance. Nothing has been started.                                              |
-| `starting`      | no       | a spinner. No verification exists yet.                                                                  |
-| `awaitingInput` | no       | the code field. Carries `destination`, `fee`, `sms`, `expiresAt`, and `lastError`.                      |
-| `captured`      | no       | a code arrived from SMS auto-capture and has **not** been submitted. Submit it; show that you did.      |
-| `submitting`    | no       | a spinner over the code field. The verification is still alive.                                         |
-| `verified`      | **yes**  | success. Carries `verificationId`.                                                                      |
-| `failed`        | **yes**  | the failure. Carries `reason`, which says whether the API or the SDK decided it.                        |
-| `denied`        | **yes**  | your own callback, or an answer the API could not read, refused this verification. `error` may be null. |
-| `expired`       | **yes**  | the verification ran out of time. Offer `reset()` and a fresh start.                                    |
-| `setupError`    | **yes**  | **your app is misconfigured** — the user can do nothing. Do not show them a retry button.               |
+| `state.kind`    | Terminal | What to render                                                                                                                                             |
+| --------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `idle`          | no       | the "send me a code" affordance. Nothing has been started.                                                                                                 |
+| `starting`      | no       | a spinner. No verification exists yet.                                                                                                                     |
+| `awaitingInput` | no       | the code field. Carries `destination`, `fee`, `sms`, `expiresAt`, and `lastError`.                                                                         |
+| `captured`      | no       | a code arrived from SMS auto-capture and has **not** been submitted. Submit it; show that you did.                                                         |
+| `submitting`    | no       | a spinner over the code field. The verification is still alive.                                                                                            |
+| `verified`      | **yes**  | success. Carries `verificationId`.                                                                                                                         |
+| `failed`        | **yes**  | the failure. Carries `reason`, which says whether the API or the SDK decided it.                                                                           |
+| `denied`        | **yes**  | your own callback, an answer the API could not read, or a destination country disabled for the application refused this verification. `error` may be null. |
+| `expired`       | **yes**  | the verification ran out of time. Offer `reset()` and a fresh start.                                                                                       |
+| `setupError`    | **yes**  | **your app is misconfigured** — the user can do nothing. Do not show them a retry button.                                                                  |
 
 Terminal means only `reset()` or a fresh `start()` leaves it. Reaching a terminal state also disarms
 the SMS listener.
 
-`setupError` is the state for a failure that is yours, not the user's: today it is
-`denied_missing_callback_url`, meaning this application started a verification with `public` auth and
-has no callback URL registered, so the API had nobody to ask. Retrying the same call cannot succeed.
+`setupError` is the state for a failure that is yours, not the user's: `denied_missing_callback_url`,
+meaning this application started a verification with `public` auth and has no callback URL
+registered, so the API had nobody to ask, or `application_paused`, meaning the application is
+paused on your account. Retrying the same call cannot succeed.
 Log it loudly; show the user something neutral.
 
 `captured` is deliberately not auto-submitted. You may want to show the code you filled in, or run a
@@ -166,7 +167,12 @@ A submit that fails with one of these returns to `awaitingInput` with the error 
 the verification stays alive for another attempt:
 
 `code_invalid`, `cli_invalid`, `code_blank`, `cli_blank`, `code_value_present`, `cli_value_present`,
-`delivery_method_invalid`, `validation_failed`, `not_ready_to_report`.
+`delivery_method_invalid`, `validation_failed`, `not_ready_to_report`, `rate_limit_per_ip`,
+`rate_limit_failed_auth`, `rate_limit_per_account`, `rate_limit_public_per_account`.
+
+A submit refused with one of the four `rate_limit_*` codes is first retried once on its own, after
+`Retry-After` (the wait is capped at 5 seconds). Only when that retry is rate-limited too does it
+return to `awaitingInput`, so the user can submit again. `volume_limit_reached` is not retried.
 
 Everything else is terminal. Two absences are deliberate:
 
@@ -192,10 +198,10 @@ discarding the stale result rather than surfacing an error, so nothing emits it 
 `source` before you read `code` — the wire has a `superseded` slug of its own, and `source` is what
 tells the two apart.
 
-Three codes read oddly and should be translated for your users: `stale_dispatch` is "the dispatch
-could not be completed in time", `superseded` is "replaced by a newer verification for the same
-number", and `application_deleted` means the application record this verification belonged to was
-removed while it was still in flight.
+Two codes read oddly and should be translated for your users: `superseded` is "replaced by a newer
+verification for the same number", and `application_deleted` means the application record this
+verification belonged to was removed while it was still in flight. `stale_dispatch` is deprecated:
+the service no longer sends it and reports `dispatch_failed` instead.
 
 ## The code input
 
@@ -217,6 +223,10 @@ state, when the verification's `expiresAt` passes, and when the server's
 deadline for the user**, and manual entry keeps working until `expiresAt`.
 
 Pass `autoCapture: false` to `useVerification` to turn the whole thing off.
+
+An explicit `sms.autofill` on `start` replaces the computed hash. `{ type: 'domain' }` or
+`{ type: 'none' }` is sent as given and the listener stays off; `{ type: 'app_hash', value }` sends
+your hash and, when `autoCapture` is on, arms the listener against it.
 
 **No SMS permission and no config plugin.** The package's own Android manifest is empty and it
 contributes no SMS or call-log permission — not `RECEIVE_SMS`, not `READ_SMS`, not `READ_CALL_LOG` —
@@ -263,11 +273,11 @@ build — that screen above is why it exists.
 
 **A wrong hash is completely silent.** The SMS arrives, the Retriever does not fire, nothing throws,
 nothing is logged in a release build, and the user types the code by hand as if the feature were
-never there. There is one guard: the server echoes the hash it stored, and if that echo does not
-equal what was sent the listener declines to arm and warns — but only in a development build, and
-only for that failure. A hash that is well-formed, accepted, stored and echoed, and simply belongs to
-a different build than the one running, produces no signal at all. Manual entry always works, so the
-worst case is a missing convenience you never notice.
+never there. There is one guard: the server echoes the hash it stored as `sms.autofill`, and if that
+echo does not equal what was sent the listener declines to arm and warns — but only in a development
+build, and only for that failure. A hash that is well-formed, accepted, stored and echoed, and simply
+belongs to a different build than the one running, produces no signal at all. Manual entry always
+works, so the worst case is a missing convenience you never notice.
 
 ### Expo Go, and anywhere else the module is absent
 
@@ -323,6 +333,17 @@ release, which is the field it will almost certainly want. A channel that expect
 is not reportable through the hook: call `client.reportVerificationRaw(id, { deliveryMethod, cli })`
 yourself, where the field is yours to pick and only the server judges the pairing.
 
+## Custom data
+
+```ts
+controller.start({ destination, deliveryMethod: 'sms', custom: 'order-42' });
+```
+
+`custom` (up to 4096 characters) is forwarded to your callback server as `data.custom`. **It is
+set by the app on the device, so anyone who controls the device controls the value.** Treat it as
+untrusted input in the callback: validate it against your own records, and never let it alone
+authorise anything.
+
 ## Language
 
 Both `sms` and `callout` take a preference list, in a block named after the channel:
@@ -342,6 +363,16 @@ if (state.kind === 'awaitingInput') {
 ```
 
 The supported tags are server-side data and change without an SDK release, so no list ships here.
+
+## Template groups
+
+`templateGroup` in either block picks one of your template groups instead of the application's
+default; an unknown name fails with `template_group_not_found`. `state.sms` and `state.callout`
+report `templateGroup`, `templateGroupUsed` and `templateFallbackReason`.
+
+```ts
+controller.start({ destination, deliveryMethod: 'sms', sms: { templateGroup: 'checkout' } });
+```
 
 ## Resuming
 

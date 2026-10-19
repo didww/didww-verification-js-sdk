@@ -3,13 +3,20 @@ import {
   isApiError,
   isKnownDeliveryMethod,
   type CalloutOptions,
+  type RateLimitedError,
   type DeliveryMethod,
+  type SmsAutofillOption,
   type SmsOptions,
   type Verification,
   type VerificationClient,
 } from '@didww/verification-core';
 
-import { initialMachineState, isTerminalState, verificationReducer } from './machine.js';
+import {
+  RATE_LIMIT_ERROR_CODES,
+  initialMachineState,
+  isTerminalState,
+  verificationReducer,
+} from './machine.js';
 import type { MachineState, VerificationEvent } from './machine.js';
 import { getAppHash } from './sms/app-hash.js';
 import { armSmsListener, withAppHash, type SmsListenerHandle } from './sms/listener.js';
@@ -20,6 +27,11 @@ export interface StartInput {
   readonly deliveryMethod: DeliveryMethod;
   readonly sms?: SmsOptions;
   readonly callout?: CalloutOptions;
+  /**
+   * Text forwarded to your callback server as `data.custom`. It is set by the app on the device,
+   * so the callback must treat it as untrusted.
+   */
+  readonly custom?: string;
 }
 
 export interface ResumeInput {
@@ -67,6 +79,18 @@ function reasonFor(error: unknown): FailureReason {
     return { source: 'api', error: item ?? { code: 'internal_error', detail: error.message } };
   }
   return { source: 'sdk', error: sdkErrorFor(error) };
+}
+
+const MAX_SUBMIT_RETRY_WAIT_SECONDS = 5;
+
+/** The wait before the one retry of a rate-limited submit, or null when it is not retried. */
+function submitRetryDelayMs(error: unknown): number | null {
+  const code = isApiError(error) && error.status === 429 ? error.errors[0]?.code : undefined;
+  if (code === undefined || !(RATE_LIMIT_ERROR_CODES as readonly string[]).includes(code)) {
+    return null;
+  }
+  const seconds = (error as RateLimitedError).retryAfterSeconds ?? 1;
+  return Math.min(seconds, MAX_SUBMIT_RETRY_WAIT_SECONDS) * 1000;
 }
 
 // Past the 32-bit range a timer fires immediately rather than never, which would disarm at once.
@@ -135,7 +159,7 @@ function createRuntime(
     listener = armSmsListener({
       sentAppHash,
       template: sms.template,
-      echoedAppHash: sms.appHash,
+      echoedAutofill: sms.autofill,
       interceptionTimeoutSeconds: sms.interceptionTimeoutSeconds,
       onCode: (code) => dispatch({ type: 'smsCaptured', value: code }),
     });
@@ -174,6 +198,7 @@ function createRuntime(
   const runStart = (
     deliveryMethod: DeliveryMethod,
     issue: (signal: AbortSignal, appHash: string | null) => Promise<Verification>,
+    autofill?: SmsAutofillOption,
   ): void => {
     if (startRun !== null) {
       // StrictMode replays the host's mount effect after a cleanup, and the same call across that
@@ -201,7 +226,9 @@ function createRuntime(
         // An absent hash never blocks the verification: `withAppHash` leaves the options alone and
         // the listener declines to arm. Skipped when auto-capture is off, since nothing would
         // consume the hash the server then appends.
-        if (deliveryMethod === 'sms' && autoCaptureEnabled()) {
+        if (autofill !== undefined) {
+          appHash = autofill.type === 'app_hash' ? autofill.value : null;
+        } else if (deliveryMethod === 'sms' && autoCaptureEnabled()) {
           appHash = await getAppHash();
         }
         const verification = await issue(signal, appHash);
@@ -261,13 +288,23 @@ function createRuntime(
     const signal = nextSignal();
 
     void (async () => {
+      const attempt = (): Promise<Verification> =>
+        report(active.verificationId, active.deliveryMethod, value, signal);
       try {
-        const verification = await report(
-          active.verificationId,
-          active.deliveryMethod,
-          value,
-          signal,
-        );
+        let verification: Verification;
+        try {
+          verification = await attempt();
+        } catch (error) {
+          const delayMs = submitRetryDelayMs(error);
+          if (delayMs === null) {
+            throw error;
+          }
+          await new Promise((resolve) => setTimeout(resolve, delayMs));
+          if (token !== run) {
+            return;
+          }
+          verification = await attempt();
+        }
         if (token === run) {
           dispatch({ type: 'submitSucceeded', verification });
         }
@@ -285,21 +322,26 @@ function createRuntime(
 
   // No channel test: the hash is read only for `sms`, and `withAppHash` returns the options
   // untouched for a null one, so every other channel passes through unchanged.
+  // An explicit `autofill` replaces the device-computed hash rather than joining it.
   const smsOptionsFor = (input: StartInput, appHash: string | null): { sms?: SmsOptions } => {
-    const sms = withAppHash(input.sms, appHash);
+    const sms = input.sms?.autofill === undefined ? withAppHash(input.sms, appHash) : input.sms;
     return sms === undefined ? {} : { sms };
   };
 
   const methods: Omit<VerificationController, 'state'> = {
     start(input) {
-      runStart(input.deliveryMethod, (signal, appHash) =>
-        optionsRef.current.client.startVerification({
-          destination: input.destination,
-          deliveryMethod: input.deliveryMethod,
-          ...smsOptionsFor(input, appHash),
-          ...(input.callout === undefined ? {} : { callout: input.callout }),
-          signal,
-        }),
+      runStart(
+        input.deliveryMethod,
+        (signal, appHash) =>
+          optionsRef.current.client.startVerification({
+            destination: input.destination,
+            deliveryMethod: input.deliveryMethod,
+            ...smsOptionsFor(input, appHash),
+            ...(input.callout === undefined ? {} : { callout: input.callout }),
+            ...(input.custom === undefined ? {} : { custom: input.custom }),
+            signal,
+          }),
+        input.deliveryMethod === 'sms' ? input.sms?.autofill : undefined,
       );
     },
     resume(input) {

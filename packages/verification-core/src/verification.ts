@@ -1,7 +1,30 @@
 import type { DeliveryMethod } from './delivery-method.js';
-import type { VerificationErrorCode, VerificationStatus } from './error-codes.js';
+import type {
+  TemplateFallbackReason,
+  VerificationErrorCode,
+  VerificationStatus,
+} from './error-codes.js';
 
-export interface SmsInfo {
+/**
+ * The marker the server framed the SMS with, so the device can read the message automatically.
+ * `value` is the app hash for `app_hash` and the domain for `domain`.
+ */
+export interface SmsAutofill {
+  readonly type: 'app_hash' | 'domain';
+  readonly value: string;
+}
+
+/** What became of `templateGroup`, in both the `sms` and the `callout` block. */
+export interface TemplateGroupInfo {
+  /** The group applied: the one you asked for, or the application's default. Null when none. */
+  readonly templateGroup: string | null;
+  /** True when the group's template was used. */
+  readonly templateGroupUsed: boolean | null;
+  /** Why the group's template was not used. Null when it was, or when no group was configured. */
+  readonly templateFallbackReason: TemplateFallbackReason | null;
+}
+
+export interface SmsInfo extends TemplateGroupInfo {
   /** The message body, with the code placeholder unsubstituted. */
   readonly template: string | null;
   /**
@@ -12,7 +35,16 @@ export interface SmsInfo {
   readonly language: string | null;
   /** Seconds to keep an on-device listener armed. A budget, not a deadline. */
   readonly interceptionTimeoutSeconds: number | null;
-  /** Echoed only when one was stored. Equality with what you sent is the arming signal. */
+  /**
+   * Echoed only when a marker was stored. Null as well for a marker type this release does not
+   * model, which `unsafeRawPayload` still carries. An `app_hash` equal to the one you sent is the
+   * arming signal.
+   */
+  readonly autofill: SmsAutofill | null;
+  /**
+   * @deprecated Use {@link SmsInfo.autofill} instead. This is its `value` when the type is
+   * `app_hash`, else null.
+   */
   readonly appHash: string | null;
   /**
    * The generated code's length, 4–8, set per application on the server. Never compile a length
@@ -21,7 +53,7 @@ export interface SmsInfo {
   readonly codeLength: number | null;
 }
 
-export interface CalloutInfo {
+export interface CalloutInfo extends TemplateGroupInfo {
   /**
    * The tag the announcement is played in — your first preference that had a recording, else
    * the server's fallback. The recorded set is not the SMS one, so a tag that picks a template

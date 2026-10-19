@@ -33,9 +33,10 @@ describe('invariants between the exported arrays', () => {
     expect(new Set(API_ERROR_CODES).size).toBe(API_ERROR_CODES.length);
   });
 
-  // The outcome codes are the 9 that arrive as `error_code` on a finished verification; they are
+  // The outcome codes are the ones that arrive as `error_code` on a finished verification; they are
   // also members of the envelope catalogue. check-slug-parity reads the same relationship as the
-  // 22/9 split axis it diffs the Kotlin and Swift SDKs on, so a drift here silently redefines it.
+  // outcome/envelope split axis it diffs the Kotlin and Swift SDKs on, so a drift here silently
+  // redefines it.
   it('every VERIFICATION_ERROR_CODE is in API_ERROR_CODES, in the same relative order', () => {
     const outcome = new Set(VERIFICATION_ERROR_CODES);
 
