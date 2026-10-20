@@ -357,8 +357,8 @@ it pass through as received rather than being flattened into a fallback.
 - `rate_limit_failed_auth` — too many failed authentication attempts from this IP address.
 - `rate_limit_per_account` — too many requests for this account.
 - `rate_limit_public_per_account` — too many public requests for this account.
-- `volume_limit_reached` — the application reached its daily or monthly verification limit for this
-  delivery method. `Retry-After` can be long (days): surface it to the user instead of retrying.
+- `volume_limit_reached` — the application reached its daily or monthly verification limit.
+  `Retry-After` can be long (days): surface it to the user instead of retrying.
   Contact support to raise the limit.
 
 `retryAfterSeconds` is a whole number of seconds read off the `Retry-After` header, or `null` when

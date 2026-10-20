@@ -26,8 +26,8 @@ This package follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   from this IP address), `rate_limit_failed_auth` (too many failed authentication attempts from this
   IP address), `rate_limit_per_account` (too many requests for this account),
   `rate_limit_public_per_account` (too many public requests for this account) and
-  `volume_limit_reached` (the application reached its daily or monthly verification limit for this
-  delivery method; `Retry-After` can be days, so surface it instead of retrying).
+  `volume_limit_reached` (the application reached its daily or monthly verification limit;
+  `Retry-After` can be days, so surface it instead of retrying).
 - New outcome codes in `VERIFICATION_ERROR_CODES`: `application_paused` and
   `destination_country_disabled` (status `denied`), and `destination_not_supported_for_channel`
   (status `failed`).
@@ -43,6 +43,8 @@ This package follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `CalloutInfo` or `Verification` — a test mock, most likely — now needs them added.
 - The device app hash handed over by `@didww/verification-react-native` is sent as
   `sms.autofill`. Giving it together with `SmsOptions.autofill` throws `ConfigurationError`.
+- Docs: a Testing section on the sandbox environment, which sends nothing and gives an outcome only
+  for the reserved test numbers.
 
 ### Deprecated
 

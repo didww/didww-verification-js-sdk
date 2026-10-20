@@ -59,6 +59,14 @@ const result = await client.reportVerification(started.id, {
 console.log(result.status); // 'verified' | 'failed' | 'expired' | 'denied' | 'pending'
 ```
 
+## Testing
+
+The sandbox environment (`environment: 'sandbox'`) sends no real SMS and places no real calls. Only
+the reserved test numbers get an outcome: each gives a fixed result, such as delivered, failed or
+expired, and a delivered one has a fixed code. A verification to any other number ends with status
+`failed` and error code `dispatch_failed`. The test numbers, their outcomes and the code to submit
+are listed in [Testing on sandbox](https://doc.didww.com/otp-verification/testing.html).
+
 ## Examples
 
 Runnable, in `examples/`:
