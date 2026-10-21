@@ -278,6 +278,14 @@ operation, not two — but the verb is inside the signed string, so it has to be
 left implicit. The Ruby SDK for this API pins `PATCH`; both mobile SDKs pin `PUT`, and so does this
 one. If you are comparing captured traffic between SDKs, that is the difference you are looking at.
 
+## Testing
+
+The sandbox environment (`environment: 'sandbox'`) sends no real SMS and places no real calls. Only
+the reserved test numbers give a predefined result, such as delivered, failed or expired, and a
+delivered one has a fixed code. Any other number is never delivered to, and its verification ends as
+failed. The test numbers, their outcomes and the code to submit are listed in
+[Testing on sandbox](https://doc.didww.com/otp-verification/testing.html).
+
 ## License
 
 MIT.

@@ -385,6 +385,14 @@ controller.resumeById({ verificationId: 'ver-1', deliveryMethod: 'sms' });
 persisted across a restart. Both land in whatever state that verification is actually in — including
 a terminal one — rather than starting anything new.
 
+## Testing
+
+The sandbox environment (`environment: 'sandbox'`) sends no real SMS and places no real calls. Only
+the reserved test numbers give a predefined result, such as delivered, failed or expired, and a
+delivered one has a fixed code. Any other number is never delivered to, and its verification ends as
+failed. The test numbers, their outcomes and the code to submit are listed in
+[Testing on sandbox](https://doc.didww.com/otp-verification/testing.html).
+
 ## License
 
 MIT.

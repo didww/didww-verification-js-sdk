@@ -43,8 +43,8 @@ This package follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `CalloutInfo` or `Verification` — a test mock, most likely — now needs them added.
 - The device app hash handed over by `@didww/verification-react-native` is sent as
   `sms.autofill`. Giving it together with `SmsOptions.autofill` throws `ConfigurationError`.
-- Docs: a Testing section on the sandbox environment, which sends nothing and gives an outcome only
-  for the reserved test numbers.
+- Docs: a Testing section on the sandbox environment, which sends nothing and gives a predefined
+  result only for the reserved test numbers.
 
 ### Deprecated
 
