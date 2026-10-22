@@ -4,7 +4,7 @@ Notable changes to `@didww/verification-react-native`.
 
 This package follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## 1.2.0 — Unreleased
+## 1.2.0 — 2026-10
 
 ### Added
 
