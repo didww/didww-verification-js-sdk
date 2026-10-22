@@ -88,6 +88,7 @@ describe('CallbackVerifier accepting a callback', () => {
           id: '01920a7b-0000-7000-8000-000000000001',
           destination: '12025550143',
           deliveryMethod: 'sms',
+          custom: null,
         },
       },
     });
@@ -116,6 +117,126 @@ describe('CallbackVerifier accepting a callback', () => {
     });
 
     expect(result.ok).toBe(true);
+  });
+});
+
+describe('CallbackVerifier during a secret rotation', () => {
+  const NEW_SECRET = 'nEw_rotated_secret_urlsafe_value_AA';
+  const THIRD_SECRET = 'tHiRd_unrelated_secret_value_AAA';
+
+  function signatureWith(secret: string, parts: Parts = {}): string {
+    return new Signer(secret).sign({
+      method: parts.method ?? 'POST',
+      path: parts.path ?? PATH,
+      contentType: parts.contentType ?? 'application/json',
+      body: parts.body ?? BODY,
+      timestamp: parts.timestamp ?? String(NOW_SECONDS),
+    });
+  }
+
+  it('accepts the Authorization signature, as the receiver of the new secret', async () => {
+    const receiver = new CallbackVerifier({ secret: NEW_SECRET, clock });
+    const request = signed({}, { secret: NEW_SECRET });
+
+    const result = await receiver.verify({
+      ...request,
+      previousSignature: signatureWith(SECRET),
+    });
+
+    expect(result.ok).toBe(true);
+  });
+
+  it('accepts the previous signature when the receiver still holds the old secret', async () => {
+    const request = signed({}, { secret: NEW_SECRET });
+
+    const result = await fixed.verify({
+      ...request,
+      previousSignature: signatureWith(SECRET),
+    });
+
+    expect(result.ok).toBe(true);
+  });
+
+  it('accepts the previous signature through a secret resolver', async () => {
+    const request = signed({}, { secret: NEW_SECRET });
+
+    const result = await resolving.verify({
+      ...request,
+      previousSignature: signatureWith(SECRET),
+    });
+
+    expect(result.ok).toBe(true);
+  });
+
+  it('rejects when neither signature matches the configured secret', async () => {
+    const request = signed({}, { secret: NEW_SECRET });
+
+    const result = await fixed.verify({
+      ...request,
+      previousSignature: signatureWith(THIRD_SECRET),
+    });
+
+    expect(result).toEqual({ ok: false, reason: 'signature_mismatch', key: KEY });
+  });
+
+  it('rejects a previous signature computed over a different body', async () => {
+    const request = signed({}, { secret: NEW_SECRET });
+
+    const result = await fixed.verify({
+      ...request,
+      previousSignature: signatureWith(SECRET, { body: '{}' }),
+    });
+
+    expect(result).toEqual({ ok: false, reason: 'signature_mismatch', key: KEY });
+  });
+
+  it.each([
+    ['absent', undefined],
+    ['null', null],
+    ['empty', ''],
+  ])('behaves as before when the previous signature is %s', async (_label, previousSignature) => {
+    const accepted = await fixed.verify({ ...signed(), previousSignature });
+    const rejected = await fixed.verify({
+      ...signed({}, { secret: NEW_SECRET }),
+      previousSignature,
+    });
+
+    expect(accepted.ok).toBe(true);
+    expect(rejected).toEqual({ ok: false, reason: 'signature_mismatch', key: KEY });
+  });
+
+  it('does not let a previous signature bypass the timestamp window', async () => {
+    const stale = String(NOW_SECONDS - 3600);
+    const request = signed({ timestamp: stale }, { secret: NEW_SECRET });
+
+    const result = await fixed.verify({
+      ...request,
+      previousSignature: signatureWith(SECRET, { timestamp: stale }),
+    });
+
+    expect(result).toEqual({ ok: false, reason: 'timestamp_out_of_window', key: KEY });
+  });
+
+  it('still requires an Authorization signature', async () => {
+    const result = await fixed.verify({
+      ...signed(),
+      authorization: `Application ${KEY}`,
+      previousSignature: signatureWith(SECRET),
+    });
+
+    expect(result).toEqual({ ok: false, reason: 'missing_signature', key: KEY });
+  });
+
+  it('compares raw base64 text, so a padding-only variation is not accepted', async () => {
+    const request = signed({}, { secret: NEW_SECRET });
+    const exact = signatureWith(SECRET);
+
+    const result = await fixed.verify({
+      ...request,
+      previousSignature: exact.replace(/=+$/, ''),
+    });
+
+    expect(result).toEqual({ ok: false, reason: 'signature_mismatch', key: KEY });
   });
 });
 
@@ -271,7 +392,7 @@ describe('CallbackVerifier path handling', () => {
 });
 
 describe('CallbackVerifier body cap', () => {
-  const oversized = `{"pad":"${'a'.repeat(8192)}"}`;
+  const oversized = `{"pad":"${'a'.repeat(32768)}"}`;
 
   it('reports an oversized unsigned body as too large, before anything else', async () => {
     // Both oversized and unsigned: the reason proves size is checked first.
@@ -294,8 +415,8 @@ describe('CallbackVerifier body cap', () => {
   });
 
   it('measures the cap in bytes, not characters', async () => {
-    // 4096 characters, 12288 bytes: a character count would wave this straight through.
-    const multibyte = '€'.repeat(4096);
+    // 12288 characters, 36864 bytes: a character count would wave this straight through.
+    const multibyte = '€'.repeat(12288);
 
     const result = await fixed.verify(signed({ body: multibyte }));
 
@@ -303,13 +424,22 @@ describe('CallbackVerifier body cap', () => {
   });
 
   it('admits a body of exactly the cap', async () => {
-    const exact = `"${'a'.repeat(8190)}"`;
-    expect(Buffer.byteLength(exact, 'utf8')).toBe(8192);
+    const exact = `"${'a'.repeat(32766)}"`;
+    expect(Buffer.byteLength(exact, 'utf8')).toBe(32768);
 
     // It clears the size check, and it is correctly signed, so the reason comes from the last one.
     const result = await fixed.verify(signed({ body: exact }));
 
     expect(result).toEqual({ ok: false, reason: 'unparseable_body', key: KEY });
+  });
+
+  it('admits the largest body the server sends: a 4096-character custom, fully escaped', async () => {
+    // The server escapes <, > and & as JSON-escaped `\u003c`-style sequences, six bytes each.
+    const largest = BODY.replace('"sms"}', `"sms","custom":"${'\\u003c'.repeat(4096)}"}`);
+
+    const result = await fixed.verify(signed({ body: largest }));
+
+    expect(result.ok && result.payload.data.custom).toBe('<'.repeat(4096));
   });
 
   it('honours a configured cap', async () => {
@@ -350,7 +480,7 @@ describe('CallbackVerifier check order', () => {
   });
 
   it('reports an oversized body with no timestamp as too large', async () => {
-    const result = await fixed.verify({ ...signed({ body: 'x'.repeat(9000) }), timestamp: null });
+    const result = await fixed.verify({ ...signed({ body: 'x'.repeat(33000) }), timestamp: null });
 
     expect(result).toEqual({ ok: false, reason: 'body_too_large', key: KEY });
   });

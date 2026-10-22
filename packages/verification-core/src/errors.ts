@@ -117,7 +117,10 @@ export class ServerError extends ApiError {
   override readonly name = 'ServerError';
 }
 
-/** 429. A start for the same application and destination within the server's cooldown window. */
+/**
+ * 429: a destination cooldown (`destination_in_cooldown`), an API rate limit (`rate_limit_*`) or
+ * the daily or monthly verification limit (`volume_limit_reached`, whose `Retry-After` can be days).
+ */
 export class RateLimitedError extends ApiError {
   override readonly name = 'RateLimitedError';
   /** From the `Retry-After` header, whole seconds. Null when the response carried none. */

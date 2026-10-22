@@ -6,7 +6,13 @@ import {
   type SmsOptions,
   type StartOptions,
 } from './options.js';
-import type { CalloutInfo, SmsInfo, Verification } from './verification.js';
+import type {
+  CalloutInfo,
+  SmsAutofill,
+  SmsInfo,
+  TemplateGroupInfo,
+  Verification,
+} from './verification.js';
 
 // The malformed/unknown boundary: a body that is not JSON, a field of the wrong JSON type, and a
 // missing non-nullable field are MALFORMED and throw `DecodingError`. A right-typed value this
@@ -50,6 +56,21 @@ function nullableString(source: Record<string, unknown>, key: string, body: stri
   }
   if (typeof value !== 'string') {
     fail(`\`${key}\` is not a string.`, body);
+  }
+  return value;
+}
+
+function nullableBoolean(
+  source: Record<string, unknown>,
+  key: string,
+  body: string,
+): boolean | null {
+  const value = source[key];
+  if (value === undefined || value === null) {
+    return null;
+  }
+  if (typeof value !== 'boolean') {
+    fail(`\`${key}\` is not a boolean.`, body);
   }
   return value;
 }
@@ -111,15 +132,44 @@ function optionalBlock<T>(
   return decode(source, body);
 }
 
+// A marker type added after this release is unknown rather than malformed, so it reads as null
+// instead of failing the whole verification.
+function decodeAutofill(source: Record<string, unknown>, body: string): SmsAutofill | null {
+  const value = source['autofill'];
+  if (value === undefined || value === null) {
+    return null;
+  }
+  const autofill = asRecord(value);
+  if (autofill === null) {
+    fail('`autofill` is present but is not an object.', body);
+  }
+  const type = requiredString(autofill, 'type', body);
+  if (type !== 'app_hash' && type !== 'domain') {
+    return null;
+  }
+  return { type, value: requiredString(autofill, 'value', body) };
+}
+
+function decodeTemplateGroup(source: Record<string, unknown>, body: string): TemplateGroupInfo {
+  return {
+    templateGroup: nullableString(source, 'template_group', body),
+    templateGroupUsed: nullableBoolean(source, 'template_group_used', body),
+    templateFallbackReason: nullableString(source, 'template_fallback_reason', body),
+  };
+}
+
 // `language` is read nullably though the specification requires it: the column behind it is
 // nullable, so a verification stored before the server recorded one answers with null.
 function decodeSms(source: Record<string, unknown>, body: string): SmsInfo {
+  const autofill = decodeAutofill(source, body);
   return {
     template: nullableString(source, 'template', body),
     language: nullableString(source, 'language', body),
     interceptionTimeoutSeconds: nullableNumber(source, 'interception_timeout', body),
-    appHash: nullableString(source, 'app_hash', body),
+    autofill,
+    appHash: autofill?.type === 'app_hash' ? autofill.value : null,
     codeLength: nullableNumber(source, 'code_length', body),
+    ...decodeTemplateGroup(source, body),
   };
 }
 
@@ -127,6 +177,7 @@ function decodeCallout(source: Record<string, unknown>, body: string): CalloutIn
   return {
     language: nullableString(source, 'language', body),
     codeLength: nullableNumber(source, 'code_length', body),
+    ...decodeTemplateGroup(source, body),
   };
 }
 
@@ -221,21 +272,42 @@ function languagesOf(options: { readonly languages?: readonly string[] }): strin
   return options.languages === undefined ? undefined : [...options.languages];
 }
 
+// The internal app-hash key is the deprecated way in and folds into `autofill`; the server refuses
+// a request carrying both, so giving both here throws rather than picking one.
+function autofillOf(options: SmsOptions): Record<string, unknown> | undefined {
+  const appHash = (options as InternalSmsOptions)[INTERNAL_APP_HASH_KEY];
+  const autofill = options.autofill;
+  if (autofill !== undefined && appHash !== undefined) {
+    throw new ConfigurationError('Give the SMS autofill or the internal app hash, not both.');
+  }
+  if (appHash !== undefined) {
+    return { type: 'app_hash', value: validAppHash(appHash) };
+  }
+  if (autofill === undefined) {
+    return undefined;
+  }
+  return autofill.type === 'app_hash'
+    ? { type: 'app_hash', value: validAppHash(autofill.value) }
+    : { type: autofill.type };
+}
+
 function encodeSmsBlock(options: SmsOptions | undefined): Record<string, unknown> | undefined {
   if (options === undefined) {
     return undefined;
   }
-  const appHash = (options as InternalSmsOptions)[INTERNAL_APP_HASH_KEY];
   return blockOf({
     languages: languagesOf(options),
-    app_hash: appHash === undefined ? undefined : validAppHash(appHash),
+    autofill: autofillOf(options),
+    template_group: options.templateGroup,
   });
 }
 
 function encodeCalloutBlock(
   options: CalloutOptions | undefined,
 ): Record<string, unknown> | undefined {
-  return options === undefined ? undefined : blockOf({ languages: languagesOf(options) });
+  return options === undefined
+    ? undefined
+    : blockOf({ languages: languagesOf(options), template_group: options.templateGroup });
 }
 
 /**
@@ -256,6 +328,9 @@ export function encodeStartRequest(options: StartOptions): string {
   const block = blocks.get(options.deliveryMethod);
   if (block !== undefined) {
     data[options.deliveryMethod] = block;
+  }
+  if (options.custom !== undefined) {
+    data.custom = options.custom;
   }
   return JSON.stringify({ data });
 }

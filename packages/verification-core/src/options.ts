@@ -2,6 +2,16 @@ import type { AuthProvider } from './auth.js';
 import type { DeliveryMethod } from './delivery-method.js';
 import type { Transport } from './transport.js';
 
+/**
+ * How the SMS is framed for automatic reading on the device. `app_hash` ends it with an Android
+ * SMS Retriever hash, `domain` adds a domain-bound line for the application's configured SMS
+ * domain, and `none` sends no marker. Leave it unset for the application default.
+ */
+export type SmsAutofillOption =
+  | { readonly type: 'app_hash'; readonly value: string }
+  | { readonly type: 'domain' }
+  | { readonly type: 'none' };
+
 export interface SmsOptions {
   /**
    * BCP-47. Template lookup is exact, so a region-less tag passes validation and then silently
@@ -9,6 +19,9 @@ export interface SmsOptions {
    * without one; that would reject what the server accepts.
    */
   readonly languages?: readonly string[];
+  readonly autofill?: SmsAutofillOption;
+  /** One of your template groups, instead of the application's default. */
+  readonly templateGroup?: string;
 }
 
 export interface CalloutOptions {
@@ -18,13 +31,15 @@ export interface CalloutOptions {
    * fall back here, which `CalloutInfo.language` reports.
    */
   readonly languages?: readonly string[];
+  /** {@link SmsOptions.templateGroup}. */
+  readonly templateGroup?: string;
 }
 
 /**
  * Internal and excluded from semver: the key `@didww/verification-react-native` uses to hand a
  * device-computed SMS Retriever hash to the request builder, which validates it and emits it as
- * `app_hash`. A plain string rather than a `unique symbol`, which is nominal per declaration site
- * and so would not survive two installed copies of this package.
+ * an `app_hash` autofill. A plain string rather than a `unique symbol`, which is nominal per
+ * declaration site and so would not survive two installed copies of this package.
  */
 export const INTERNAL_APP_HASH_KEY = '@didww/verification-core#appHash';
 
@@ -39,6 +54,11 @@ export interface StartOptions {
   readonly deliveryMethod: DeliveryMethod;
   readonly sms?: SmsOptions;
   readonly callout?: CalloutOptions;
+  /**
+   * Up to 4096 characters of arbitrary text, forwarded unchanged to your callback server in the
+   * `verification_request` event as `data.custom`. It is not returned on the verification.
+   */
+  readonly custom?: string;
   readonly signal?: AbortSignal;
 }
 

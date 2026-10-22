@@ -159,11 +159,35 @@
             "alwaysPresent": true,
             "notes": "Seconds to keep an on-device listener armed. A budget, not a deadline: manual entry works until expires_at."
           },
+          "autofill": {
+            "type": "object",
+            "nullable": false,
+            "alwaysPresent": false,
+            "notes": "{ \"type\": \"app_hash\", \"value\": \"<hash>\" } or { \"type\": \"domain\", \"value\": \"<domain>\" }. The key is omitted entirely unless a marker was stored on this verification. For app_hash, the deprecated flat app_hash echoes the same value and is likewise omitted; an app_hash value equal to what was sent is the only confirmation that it was accepted."
+          },
           "app_hash": {
             "type": "string",
             "nullable": false,
             "alwaysPresent": false,
-            "notes": "The key is omitted entirely unless a hash was stored on this verification. Equality with what was sent is the only confirmation that it was accepted."
+            "notes": "Deprecated: read autofill instead. Echoes the autofill value when an app_hash marker was stored, and is omitted otherwise."
+          },
+          "template_group": {
+            "type": "string",
+            "nullable": true,
+            "alwaysPresent": true,
+            "notes": "The template group applied: the requested one, else the application's default. Null when none applied."
+          },
+          "template_group_used": {
+            "type": "boolean",
+            "nullable": false,
+            "alwaysPresent": true,
+            "notes": "True when the group's template was used."
+          },
+          "template_fallback_reason": {
+            "type": "string",
+            "nullable": true,
+            "alwaysPresent": true,
+            "notes": "Why the group's template was not used: language_missing, version_pending, version_rejected, audio_not_ready or group_missing. Null when it was used, or when no template group applies (template_group_used is then false). group_missing comes with a null template_group: the requested or default group no longer exists. A reason added later arrives as a new string; the SDK lists the known ones in TEMPLATE_FALLBACK_REASONS."
           },
           "code_length": {
             "type": "integer",
@@ -183,6 +207,24 @@
             "nullable": true,
             "alwaysPresent": true,
             "notes": "The tag the announcement is played in: the first requested tag with a recording, else the fallback. Nullable for the same reason as sms.language."
+          },
+          "template_group": {
+            "type": "string",
+            "nullable": true,
+            "alwaysPresent": true,
+            "notes": "The template group applied: the requested one, else the application's default. Null when none applied."
+          },
+          "template_group_used": {
+            "type": "boolean",
+            "nullable": false,
+            "alwaysPresent": true,
+            "notes": "True when the group's template was used."
+          },
+          "template_fallback_reason": {
+            "type": "string",
+            "nullable": true,
+            "alwaysPresent": true,
+            "notes": "Why the group's template was not used: language_missing, version_pending, version_rejected, audio_not_ready or group_missing. Null when it was used, or when no template group applies (template_group_used is then false). group_missing comes with a null template_group: the requested or default group no longer exists. A reason added later arrives as a new string; the SDK lists the known ones in TEMPLATE_FALLBACK_REASONS."
           },
           "code_length": {
             "type": "integer",
@@ -207,6 +249,11 @@
           "required": true,
           "enum": "DELIVERY_METHODS"
         },
+        "custom": {
+          "type": "string",
+          "required": false,
+          "notes": "Arbitrary text of at most constraints.custom.maxLength characters, forwarded unchanged in the verification_request callback as data.custom. An empty string is treated as absent. Send a string. Never returned by create, get or report."
+        },
         "sms": {
           "type": "object",
           "required": false,
@@ -218,7 +265,18 @@
             },
             "app_hash": {
               "type": "string",
-              "required": false
+              "required": false,
+              "notes": "Deprecated: send autofill instead. Read only when autofill is absent, as { \"type\": \"app_hash\", \"value\": <app_hash> }; a request carrying both fails with autofill_invalid (422)."
+            },
+            "autofill": {
+              "type": "object",
+              "required": false,
+              "notes": "{ \"type\": \"app_hash\", \"value\": \"<hash>\" } frames the message for the Android SMS Retriever; { \"type\": \"domain\" } adds a domain-bound line for the application's configured SMS domain, and fails with sms_domain_not_configured (422) when it has none; { \"type\": \"none\" } asks for no marker. Omitted or null takes the application default. Any other shape or an unknown type fails the whole request with autofill_invalid (422). The deprecated flat sms.app_hash is read only when autofill is absent; a request carrying both fails with autofill_invalid (422)."
+            },
+            "template_group": {
+              "type": "string",
+              "required": false,
+              "notes": "The name of one of the account's template groups, instead of the application's default. An unknown name fails the whole request with template_group_not_found (422)."
             }
           }
         },
@@ -229,6 +287,11 @@
             "languages": {
               "type": "array of string",
               "required": false
+            },
+            "template_group": {
+              "type": "string",
+              "required": false,
+              "notes": "The name of one of the account's template groups, instead of the application's default. An unknown name fails the whole request with template_group_not_found (422)."
             }
           }
         }
@@ -270,6 +333,10 @@
       "pattern": "^[A-Za-z0-9+/]{11}$",
       "length": 11,
       "notes": "Validated on every start once supplied; a malformed hash fails the whole request with app_hash_invalid (422) rather than being ignored."
+    },
+    "custom": {
+      "maxLength": 4096,
+      "notes": "Counted in characters. Longer fails the whole request with custom_too_long (422)."
     },
     "codePlaceholder": {
       "token": "{{CODE}}",
@@ -393,7 +460,8 @@
         "data": {
           "id": "<verification id>",
           "destination": "<digits only>",
-          "delivery_method": "<sms | callout>"
+          "delivery_method": "<sms | callout>",
+          "custom": "<the start request's custom text; key absent when none was sent>"
         }
       },
       "retries": 0

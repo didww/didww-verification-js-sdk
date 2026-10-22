@@ -15,8 +15,11 @@ const smsCreate: Record<string, unknown> = {
     template: 'Your verification code is {code}',
     language: 'de-DE',
     interception_timeout: 120,
-    app_hash: 'FA+9qCX9VSu',
+    autofill: { type: 'app_hash', value: 'FA+9qCX9VSu' },
     code_length: 6,
+    template_group: 'checkout',
+    template_group_used: true,
+    template_fallback_reason: null,
   },
 };
 
@@ -29,7 +32,12 @@ const calloutCreate: Record<string, unknown> = {
   error_code: null,
   error_detail: null,
   expires_at: '2026-08-25T12:00:00.000Z',
-  callout: { language: 'pt-PT' },
+  callout: {
+    language: 'pt-PT',
+    template_group: 'checkout',
+    template_group_used: false,
+    template_fallback_reason: 'audio_not_ready',
+  },
 };
 
 const noSmsBlockCreate: Record<string, unknown> = {
@@ -76,8 +84,12 @@ describe('decodeVerificationEnvelope', () => {
         template: 'Your verification code is {code}',
         language: 'de-DE',
         interceptionTimeoutSeconds: 120,
+        autofill: { type: 'app_hash', value: 'FA+9qCX9VSu' },
         appHash: 'FA+9qCX9VSu',
         codeLength: 6,
+        templateGroup: 'checkout',
+        templateGroupUsed: true,
+        templateFallbackReason: null,
       },
       callout: null,
     });
@@ -94,14 +106,26 @@ describe('decodeVerificationEnvelope', () => {
   it('decodes a callout create, callout block included', () => {
     const verification = decodeVerificationEnvelope(body({ ...calloutCreate }));
 
-    expect(verification.callout).toEqual({ language: 'pt-PT', codeLength: null });
+    expect(verification.callout).toEqual({
+      language: 'pt-PT',
+      codeLength: null,
+      templateGroup: 'checkout',
+      templateGroupUsed: false,
+      templateFallbackReason: 'audio_not_ready',
+    });
     expect(verification.sms).toBeNull();
   });
 
   it('decodes a callout block carrying no language to null, the value a legacy row answers with', () => {
     const verification = decodeVerificationEnvelope(body({ ...calloutCreate, callout: {} }));
 
-    expect(verification.callout).toEqual({ language: null, codeLength: null });
+    expect(verification.callout).toEqual({
+      language: null,
+      codeLength: null,
+      templateGroup: null,
+      templateGroupUsed: null,
+      templateFallbackReason: null,
+    });
   });
 
   it('decodes an sms block carrying no language to null', () => {
@@ -246,18 +270,54 @@ describe('decodeVerificationEnvelope', () => {
     expect(error.body).toBe(raw);
   });
 
-  it('decodes an absent app_hash to null', () => {
+  it('decodes an absent autofill to null', () => {
     const raw = body({
       ...smsCreate,
       sms: { template: 'Code: {code}', interception_timeout: 120 },
     });
-    expect(raw).not.toContain('app_hash');
+    expect(raw).not.toContain('autofill');
+
+    const sms = decodeVerificationEnvelope(raw).sms;
+    expect(sms?.autofill).toBeNull();
+    expect(sms?.appHash).toBeNull();
+  });
+
+  it('decodes a null autofill to null', () => {
+    const raw = body({ ...smsCreate, sms: { autofill: null } });
+
+    expect(decodeVerificationEnvelope(raw).sms?.autofill).toBeNull();
+  });
+
+  it('decodes an app_hash autofill, and derives the deprecated appHash from it', () => {
+    const sms = decodeVerificationEnvelope(body({ ...smsCreate })).sms;
+
+    expect(sms?.autofill).toEqual({ type: 'app_hash', value: 'FA+9qCX9VSu' });
+    expect(sms?.appHash).toBe('FA+9qCX9VSu');
+  });
+
+  it('ignores a top-level sms.app_hash, which the server no longer sends', () => {
+    const raw = body({ ...smsCreate, sms: { app_hash: 'FA+9qCX9VSu' } });
 
     expect(decodeVerificationEnvelope(raw).sms?.appHash).toBeNull();
   });
 
-  it('decodes a present app_hash to the string', () => {
-    expect(decodeVerificationEnvelope(body({ ...smsCreate })).sms?.appHash).toBe('FA+9qCX9VSu');
+  it('reads an autofill type this release does not model as null rather than failing', () => {
+    const raw = body({ ...smsCreate, sms: { autofill: { type: 'carrier_pigeon' } } });
+
+    const sms = decodeVerificationEnvelope(raw).sms;
+    expect(sms?.autofill).toBeNull();
+    expect(sms?.appHash).toBeNull();
+  });
+
+  it.each([
+    ['not an object', 'FA+9qCX9VSu'],
+    ['an array', [{ type: 'app_hash', value: 'FA+9qCX9VSu' }]],
+    ['without a string type', { type: 7, value: 'FA+9qCX9VSu' }],
+    ['an app_hash without a string value', { type: 'app_hash' }],
+  ])('rejects an autofill that is %s', (_, autofill) => {
+    const raw = body({ ...smsCreate, sms: { autofill } });
+
+    expect(decodingErrorFrom(() => decodeVerificationEnvelope(raw)).body).toBe(raw);
   });
 
   it('decodes a null template and a missing interception_timeout defensively', () => {
@@ -269,9 +329,34 @@ describe('decodeVerificationEnvelope', () => {
       template: null,
       language: null,
       interceptionTimeoutSeconds: null,
+      autofill: null,
       appHash: null,
       codeLength: null,
+      templateGroup: null,
+      templateGroupUsed: null,
+      templateFallbackReason: null,
     });
+  });
+
+  it('decodes a domain autofill, with no deprecated appHash', () => {
+    const raw = body({ ...smsCreate, sms: { autofill: { type: 'domain', value: 'example.com' } } });
+
+    const sms = decodeVerificationEnvelope(raw).sms;
+    expect(sms?.autofill).toEqual({ type: 'domain', value: 'example.com' });
+    expect(sms?.appHash).toBeNull();
+  });
+
+  it('passes a template fallback reason this release does not model through as received', () => {
+    const raw = body({ ...smsCreate, sms: { template_fallback_reason: 'carrier_pigeon' } });
+
+    expect(decodeVerificationEnvelope(raw).sms?.templateFallbackReason).toBe('carrier_pigeon');
+  });
+
+  it('rejects a non-boolean template_group_used', () => {
+    const error = decodingErrorFrom(() =>
+      decodeVerificationEnvelope(body({ ...smsCreate, sms: { template_group_used: 'true' } })),
+    );
+    expect(error.message).toContain('template_group_used');
   });
 
   it('rejects a non-numeric code_length', () => {

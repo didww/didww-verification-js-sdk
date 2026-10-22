@@ -1,6 +1,7 @@
 import {
   INTERNAL_APP_HASH_KEY,
   type InternalSmsOptions,
+  type SmsAutofill,
   type SmsOptions,
 } from '@didww/verification-core';
 
@@ -44,8 +45,8 @@ export interface SmsListenerOptions {
   readonly sentAppHash: string | null;
   /** `SmsInfo.template` — the body the code was rendered into. */
   readonly template: string | null;
-  /** `SmsInfo.appHash` — the hash the server echoed back. */
-  readonly echoedAppHash: string | null;
+  /** `SmsInfo.autofill` — the marker the server echoed back. */
+  readonly echoedAutofill: SmsAutofill | null;
   /** Called with the extracted code, at most once per matching message. */
   readonly onCode: (code: string) => void;
   /** Receives the development-only diagnostics instead of the console, when supplied. */
@@ -82,6 +83,10 @@ function budgetMsFor(seconds: number | null | undefined): number | null {
   return typeof seconds === 'number' && seconds > 0 ? seconds * 1000 : null;
 }
 
+function echoedHashOf(echoed: SmsAutofill | null): string | null {
+  return echoed?.type === 'app_hash' ? echoed.value : null;
+}
+
 function describeEcho(echoed: string | null): string {
   return echoed === null ? 'no app hash' : `"${echoed}"`;
 }
@@ -101,7 +106,8 @@ function quietly(step: () => void): void {
  * throws, and never rejects: manual entry stays live in every case.
  */
 export function armSmsListener(options: SmsListenerOptions): SmsListenerHandle | null {
-  const { sentAppHash, echoedAppHash, template, onCode } = options;
+  const { sentAppHash, template, onCode } = options;
+  const echoedAppHash = echoedHashOf(options.echoedAutofill);
 
   if (sentAppHash === null) {
     return null;

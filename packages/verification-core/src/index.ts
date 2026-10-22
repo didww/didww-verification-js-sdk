@@ -1,9 +1,15 @@
-export { API_ERROR_CODES, VERIFICATION_ERROR_CODES, VERIFICATION_STATUSES } from './error-codes.js';
+export {
+  API_ERROR_CODES,
+  TEMPLATE_FALLBACK_REASONS,
+  VERIFICATION_ERROR_CODES,
+  VERIFICATION_STATUSES,
+} from './error-codes.js';
 export { isKnownApiErrorCode } from './error-codes.js';
 export type {
   ApiErrorCode,
   KnownApiErrorCode,
   Open,
+  TemplateFallbackReason,
   VerificationErrorCode,
   VerificationStatus,
 } from './error-codes.js';
@@ -30,7 +36,14 @@ export {
 export type { ApiErrorItem } from './errors.js';
 
 export { isFinished, isPending } from './verification.js';
-export type { CalloutInfo, SmsInfo, Verification, VerificationResult } from './verification.js';
+export type {
+  CalloutInfo,
+  SmsAutofill,
+  SmsInfo,
+  TemplateGroupInfo,
+  Verification,
+  VerificationResult,
+} from './verification.js';
 
 export { INTERNAL_APP_HASH_KEY } from './options.js';
 export type {
@@ -40,6 +53,7 @@ export type {
   RawReportOptions,
   ReportOptions,
   RetryPolicy,
+  SmsAutofillOption,
   SmsOptions,
   StartOptions,
 } from './options.js';

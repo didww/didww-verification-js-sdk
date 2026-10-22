@@ -12,9 +12,9 @@ second copy here would have to be edited in step with the first, and the compari
 would prove only that someone edited both.
 
 Everything that reads a vocabulary reads it from the package: `examples/mock-api` resolves every
-slug it can emit against `API_ERROR_CODES` at module load, `check-slug-parity.mjs` takes the 22/9
-split axis from `VERIFICATION_ERROR_CODES`, and `contract-check.mjs` folds all four in from source
-before comparing them to the specification.
+slug it can emit against `API_ERROR_CODES` at module load, `check-slug-parity.mjs` takes the
+outcome/envelope split axis from `VERIFICATION_ERROR_CODES`, and `contract-check.mjs` folds all four
+in from source before comparing them to the specification.
 
 ## What this file is for
 

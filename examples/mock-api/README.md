@@ -159,9 +159,16 @@ client can report the right value without reading a message.
   in a `by_number` path silently addresses a different number.
 - **Language tags** are validated loosely and matched strictly: `pl` passes validation and then
   falls back to `en-US`, because templates are keyed on the exact canonical tag.
-- **`app_hash`** is validated on every start once supplied; a malformed one fails the whole
-  verification with `app_hash_invalid`, and the key is omitted from the response unless a hash was
-  stored.
+- **`sms.autofill`** is validated on every start once supplied: a malformed marker — not an object,
+  an unknown type, extra keys, an `app_hash` without a string value, a `domain` or `none` with one —
+  fails the whole verification with `autofill_invalid`, and a malformed hash with `app_hash_invalid`.
+  No mock application has an SMS domain, so `domain` fails with `sms_domain_not_configured`. It is
+  echoed as `{ type: 'app_hash', value }`, plus the deprecated flat `app_hash`, only when a hash was
+  stored. The deprecated `sms.app_hash` is read only when `autofill` is absent; sending both fails
+  the request with `autofill_invalid`.
+- **`template_group`** in either block fails with `template_group_not_found`: no mock account has
+  template groups. Responses always carry `template_group: null`, `template_group_used: false` and
+  `template_fallback_reason: null`.
 - **Destination cooldown.** Starting a verification for the same application and destination again
   within `cooldownSeconds` (30 by default, `COOLDOWN_SECONDS` or the `cooldownSeconds` option; `0`
   disables it) of a non-denied one is refused with `429` and `destination_in_cooldown`, and carries

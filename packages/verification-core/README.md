@@ -133,6 +133,20 @@ it.
 release does not model. The `undefined` is the point — it is what lets a channel added after this
 release through untouched instead of rejecting it.
 
+## Passing your own context
+
+```ts
+await client.startVerification({
+  destination: '+351912345678',
+  deliveryMethod: 'sms',
+  custom: 'order-42',
+});
+```
+
+`custom` is up to 4096 characters of arbitrary text, sent unchanged to your callback server as
+`data.custom` in the `verification_request` event. It is not returned on the verification, and an
+empty string is treated as absent. Longer text fails the start with `custom_too_long`.
+
 ## Choosing a language
 
 ```ts
@@ -150,7 +164,7 @@ await client.startVerification({
 ```
 
 Options travel in a block named after the channel, and only the block matching `deliveryMethod` is
-sent — supplying both is harmless. `languages` is the only member of either.
+sent — supplying both is harmless.
 
 Tags are tried in order and the first that matches wins, falling back to `en-US`. Include the
 region subtag: a bare primary subtag such as `'pt'` passes validation and then silently falls back,
@@ -174,13 +188,52 @@ v.callout?.language; // 'en-US' — no recording for ka-GE, so it fell back
 before the server began recording one. The supported tags are server-side data and change without
 an SDK release, so this package hardcodes no list; the API reference carries the current one.
 
-**`app_hash` is not in `SmsOptions`, on purpose.** It identifies the _running build_, so it cannot
-be a value your code writes down: the hash of a debug build, a locally signed build and a
-store-distributed build all differ. The React Native package computes it on the device and hands it
-to the request builder through an internal channel. Nothing else needs it, and a hash that is
-merely wrong-looking fails the whole verification with `app_hash_invalid` rather than being
-ignored — so this package validates whatever reaches it and throws `ConfigurationError` before
-issuing a request.
+## SMS autofill
+
+```ts
+await client.startVerification({
+  destination: '+351912345678',
+  deliveryMethod: 'sms',
+  sms: { autofill: { type: 'domain' } },
+});
+```
+
+`sms.autofill` frames the message so the device can read it automatically: `{ type: 'app_hash',
+value }` ends it with an Android SMS Retriever hash, `{ type: 'domain' }` adds a domain-bound line
+for the application's configured SMS domain, and `{ type: 'none' }` sends no marker. Leave it unset
+for the application default. `domain` on an application with no SMS domain fails with
+`sms_domain_not_configured`, and a malformed `autofill` with `autofill_invalid`.
+
+**An app hash identifies the _running build_,** so it is rarely a value your code writes down: the
+hash of a debug build, a locally signed build and a store-distributed build all differ. The React
+Native package computes it on the device and sends it for you when `autofill` is unset. A hash that
+is merely wrong-looking fails the whole verification with `app_hash_invalid` rather than being
+ignored, so this package validates one before issuing a request and throws `ConfigurationError`.
+
+## Template groups
+
+```ts
+await client.startVerification({
+  destination: '+351912345678',
+  deliveryMethod: 'sms',
+  sms: { templateGroup: 'checkout' },
+});
+```
+
+`templateGroup`, in the `sms` or the `callout` block, picks one of your template groups instead of
+the application's default. An unknown name fails the start with `template_group_not_found`. Both
+blocks of the response report what happened:
+
+```ts
+v.sms?.templateGroup; // the group applied, or null
+v.sms?.templateGroupUsed; // true when the group's template was used
+v.sms?.templateFallbackReason; // why not: 'language_missing', 'version_pending', …
+```
+
+`templateGroupUsed` false with a null reason means no template group applies; `group_missing` comes
+with a null `templateGroup`, because the requested or default group no longer exists.
+`templateFallbackReason` is an open vocabulary: the known reasons are in
+`TEMPLATE_FALLBACK_REASONS`, and a reason added later arrives as the string received.
 
 ## Reading a verification
 
@@ -216,10 +269,16 @@ therefore reach `expired` without any state change having occurred.
 - `interceptionTimeoutSeconds` — **a budget, not a deadline**. It is how long to keep an on-device
   listener armed, not how long the user has. Manual entry keeps working until `expiresAt`, so never
   fail a verification because this ran out.
-- `appHash` — echoed back only when one was stored. Equality with what was sent is the only
-  confirmation the server accepted it.
+- `autofill` — the marker the message is framed with, `{ type: 'app_hash' | 'domain', value }`,
+  echoed back only when one was stored. `value` is the hash or the domain. For `app_hash`, a `value`
+  equal to the hash that was sent is the only confirmation the server accepted it. `null` as well
+  for a marker type this release does not model.
+- `appHash` — **deprecated**, kept for compatibility: `autofill.value` when its type is
+  `'app_hash'`, else `null`.
 - `codeLength` — the generated code's length, 4–8, set per application on the server. `callout`
   carries the same field. Never compile a length into your UI.
+- `templateGroup`, `templateGroupUsed`, `templateFallbackReason` — see
+  [Template groups](#template-groups). `callout` carries the same fields.
 
 `expiresAt` is a `Date` or `null`, decoded from a strict ISO-8601 check rather than bare
 `new Date()`, which reads `"2026"` and `"25 Aug 2026"` as confident wrong instants and rolls
@@ -291,11 +350,20 @@ try {
 `isKnownApiErrorCode` narrows to the closed set so a `switch` over it is exhaustive; codes outside
 it pass through as received rather than being flattened into a fallback.
 
-**429 is `destination_in_cooldown`.** Starting a verification for the same application and
-destination again too soon after a non-denied one is refused, and `RateLimitedError` carries
-`retryAfterSeconds` — a whole number of seconds read off the `Retry-After` header, or `null` when
-the response carried none. `startVerification` is never retried automatically on any status, 429
-included: wait out `retryAfterSeconds` yourself before trying again.
+**429 is `RateLimitedError`, and its code says which limit was hit:**
+
+- `destination_in_cooldown` — a verification for this destination was requested too recently.
+- `rate_limit_per_ip` — too many requests from this IP address.
+- `rate_limit_failed_auth` — too many failed authentication attempts from this IP address.
+- `rate_limit_per_account` — too many requests for this account.
+- `rate_limit_public_per_account` — too many public requests for this account.
+- `volume_limit_reached` — the application reached its daily or monthly verification limit.
+  `Retry-After` can be long (days): surface it to the user instead of retrying.
+  Contact support to raise the limit.
+
+`retryAfterSeconds` is a whole number of seconds read off the `Retry-After` header, or `null` when
+the response carried none. No request is retried automatically on 429, and `startVerification` is
+never retried on any status: wait out `retryAfterSeconds` yourself before trying again.
 
 ```ts
 import { isApiError, type RateLimitedError } from '@didww/verification-core';
@@ -310,13 +378,20 @@ try {
 }
 ```
 
-Three outcome codes read oddly on the wire and are worth translating for your users:
+Some starts are refused as an outcome rather than an error: a 201 whose `status` is `denied` or
+`failed`, with `errorCode` set to `application_paused`, `destination_country_disabled` or
+`destination_not_supported_for_channel`. The last one covers an unsupported destination — no
+country, no delivery for the channel, or a blocked range — and is no longer a 422.
+
+Two outcome codes read oddly on the wire and are worth translating for your users:
 
 | Code                  | What happened                                                                                 |
 | --------------------- | --------------------------------------------------------------------------------------------- |
-| `stale_dispatch`      | the dispatch could not be completed in time                                                   |
 | `superseded`          | replaced by a newer verification for the same number                                          |
 | `application_deleted` | the application record this verification belonged to was removed while it was still in flight |
+
+`stale_dispatch` is deprecated: the service no longer sends it and reports those verifications as
+`dispatch_failed`. It stays in `VERIFICATION_ERROR_CODES` until the next major version.
 
 ## Substituting the transport and the auth
 
@@ -383,7 +458,6 @@ const body = JSON.stringify({
       template: 'Your code is {{CODE}}',
       language: 'en-US',
       interception_timeout: 300,
-      app_hash: null,
     },
   },
 });
