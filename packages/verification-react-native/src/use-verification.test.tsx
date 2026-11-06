@@ -842,7 +842,20 @@ describe('useVerification: rate-limited submit', () => {
     expect(controllerOf(box).state.kind).toBe('failed');
   });
 
-  it('does not retry destination_prefix_rate_limited', async () => {
+  it('does not retry destination_prefix_rate_limited on submit', async () => {
+    const { requests, box } = await submitAfterStart([
+      rateLimited('destination_prefix_rate_limited', '1'),
+    ]);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5_000);
+    });
+
+    expect(requests).toHaveLength(2);
+    expect(controllerOf(box).state.kind).toBe('failed');
+  });
+
+  it('leaves destination_prefix_rate_limited on start terminal', async () => {
     const { transport, requests } = fakeTransport([
       rateLimited('destination_prefix_rate_limited', '120'),
     ]);
