@@ -172,7 +172,7 @@ the verification stays alive for another attempt:
 
 A submit refused with one of the four `rate_limit_*` codes is retried once on its own after
 `Retry-After` when that is at most 5 seconds. A longer `Retry-After`, or a retry that is
-rate-limited too, returns to `awaitingInput`, so the user can submit again. `volume_limit_reached` is not retried.
+rate-limited too, returns to `awaitingInput`, so the user can submit again. `volume_limit_reached` and `destination_prefix_rate_limited` are not retried.
 
 Everything else is terminal. Two absences are deliberate:
 

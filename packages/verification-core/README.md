@@ -360,6 +360,9 @@ it pass through as received rather than being flattened into a fallback.
 - `volume_limit_reached` — the application reached its daily or monthly verification limit.
   `Retry-After` can be long (days): surface it to the user instead of retrying.
   Contact support to raise the limit.
+- `destination_prefix_rate_limited` — too many verifications to this number range; try again later.
+  Wait for `Retry-After` before starting another verification. For your end user, something like
+  "Too many verification requests right now. Please try again later." is enough.
 
 `retryAfterSeconds` is a whole number of seconds read off the `Retry-After` header, or `null` when
 the response carried none. No request is retried automatically on 429, and `startVerification` is

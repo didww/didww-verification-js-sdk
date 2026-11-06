@@ -62,6 +62,7 @@ export const API_ERROR_CODES = [
   'rate_limit_per_account',
   'rate_limit_public_per_account',
   'volume_limit_reached',
+  'destination_prefix_rate_limited',
   ...VERIFICATION_ERROR_CODES,
 ] as const;
 

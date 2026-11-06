@@ -842,6 +842,20 @@ describe('useVerification: rate-limited submit', () => {
     expect(controllerOf(box).state.kind).toBe('failed');
   });
 
+  it('does not retry destination_prefix_rate_limited', async () => {
+    const { transport, requests } = fakeTransport([
+      rateLimited('destination_prefix_rate_limited', '120'),
+    ]);
+    const box: Box = { controller: null };
+
+    render(<Host client={clientFor(transport)} box={box} startOnMount={SMS_START} />);
+    await flush();
+    await flush();
+
+    expect(requests).toHaveLength(1);
+    expect(controllerOf(box).state.kind).toBe('failed');
+  });
+
   it('leaves a rate-limited start terminal, without a retry', async () => {
     const { transport, requests } = fakeTransport([rateLimited('rate_limit_per_ip')]);
     const box: Box = { controller: null };

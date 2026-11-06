@@ -5,6 +5,13 @@ Notable changes to `@didww/verification-core`.
 This package follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Two names are excluded from semver and may change in any release:
 `Verification.unsafeRawPayload` and `INTERNAL_APP_HASH_KEY`.
 
+## 1.3.0 — Unreleased
+
+### Added
+
+- `destination_prefix_rate_limited` error code, returned as `RateLimitedError` (429) when too many
+  verifications are requested to a number range. Wait for `Retry-After` before trying again.
+
 ## 1.2.0 — 2026-10
 
 ### Added

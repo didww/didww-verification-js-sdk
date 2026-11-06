@@ -64,6 +64,7 @@ describe('API_ERROR_CODES', () => {
     'rate_limit_per_account',
     'rate_limit_public_per_account',
     'volume_limit_reached',
+    'destination_prefix_rate_limited',
   ])('lists %s', (code) => {
     expect(isKnownApiErrorCode(code)).toBe(true);
   });
