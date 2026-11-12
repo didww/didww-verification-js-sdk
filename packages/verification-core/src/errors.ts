@@ -119,7 +119,8 @@ export class ServerError extends ApiError {
 
 /**
  * 429: a destination cooldown (`destination_in_cooldown`), an API rate limit (`rate_limit_*`) or
- * the daily or monthly verification limit (`volume_limit_reached`, whose `Retry-After` can be days).
+ * the daily or monthly verification limit (`volume_limit_reached`, whose `Retry-After` can be days),
+ * or a number-range limit (`destination_prefix_rate_limited`).
  */
 export class RateLimitedError extends ApiError {
   override readonly name = 'RateLimitedError';

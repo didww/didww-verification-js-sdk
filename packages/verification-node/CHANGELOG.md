@@ -4,6 +4,13 @@ Notable changes to `@didww/verification-node`.
 
 This package follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 1.3.0 — Unreleased
+
+### Added
+
+- Kept in step with `@didww/verification-core` 1.3.0 (the `destination_prefix_rate_limited` error
+  code) and the `channel_blocked` error code.
+
 ## 1.2.0 — 2026-10
 
 ### Added

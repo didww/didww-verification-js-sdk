@@ -932,6 +932,19 @@ describe('responses', () => {
     expect(failure).toMatchObject({ status: 502, code: null, errors: [], responseBody: body });
   });
 
+  it('maps channel_blocked on a 422 to ValidationError with its code', async () => {
+    const body = JSON.stringify({
+      errors: [{ code: 'channel_blocked', detail: 'delivery method is blocked for this account' }],
+    });
+    const { client } = setup([{ status: 422, headers: {}, body }], { retry: { attempts: 1 } });
+
+    const failure = await failureOf(
+      client.startVerification({ destination: DESTINATION, deliveryMethod: 'sms' }),
+    );
+    expect(failure).toBeInstanceOf(ValidationError);
+    expect(failure).toMatchObject({ status: 422, code: 'channel_blocked' });
+  });
+
   it('reads `Retry-After` off a 429 into `retryAfterSeconds`', async () => {
     const body = JSON.stringify({
       errors: [{ code: 'destination_in_cooldown', detail: 'Try again later.' }],
@@ -945,6 +958,29 @@ describe('responses', () => {
     );
     expect(failure).toBeInstanceOf(RateLimitedError);
     expect((failure as RateLimitedError).retryAfterSeconds).toBe(17);
+  });
+
+  it('maps destination_prefix_rate_limited on a 429 to RateLimitedError with its code', async () => {
+    const body = JSON.stringify({
+      errors: [
+        {
+          code: 'destination_prefix_rate_limited',
+          detail: 'too many verifications to this number range; try again later',
+        },
+      ],
+    });
+    const { client } = setup([{ status: 429, headers: { 'Retry-After': '120' }, body }], {
+      retry: { attempts: 1 },
+    });
+
+    const failure = await failureOf(
+      client.startVerification({ destination: DESTINATION, deliveryMethod: 'sms' }),
+    );
+    expect(failure).toBeInstanceOf(RateLimitedError);
+    expect(failure).toMatchObject({
+      code: 'destination_prefix_rate_limited',
+      retryAfterSeconds: 120,
+    });
   });
 
   it('reads `retryAfterSeconds` as null when a 429 carries no `Retry-After`', async () => {
