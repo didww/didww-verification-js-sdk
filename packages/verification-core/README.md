@@ -381,6 +381,9 @@ try {
 }
 ```
 
+A start can also be refused with a 422 `channel_blocked`: the account can't use the requested
+delivery method, and no verification is created. Contact DIDWW support.
+
 Some starts are refused as an outcome rather than an error: a 201 whose `status` is `denied` or
 `failed`, with `errorCode` set to `application_paused`, `destination_country_disabled` or
 `destination_not_supported_for_channel`. The last one covers an unsupported destination — no

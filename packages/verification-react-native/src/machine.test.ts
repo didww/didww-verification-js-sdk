@@ -31,6 +31,7 @@ const TERMINAL_SLUGS = API_ERROR_CODES.filter(
 const SPECIAL_TERMINAL: readonly string[] = [
   'denied_missing_callback_url',
   'application_paused',
+  'channel_blocked',
   'denied_by_callback',
   'denied_invalid_callback_response',
   'destination_country_disabled',
@@ -189,6 +190,17 @@ describe('every error during starting is terminal', () => {
       code: 'denied_missing_callback_url',
       detail: 'no url',
     });
+  });
+
+  it('maps channel_blocked during starting to a setup error', () => {
+    const next = reduceAll([
+      { type: 'startRequested' },
+      {
+        type: 'startFailed',
+        reason: { source: 'api', error: item('channel_blocked', 'blocked') },
+      },
+    ]);
+    expect(next.state).toEqual({ kind: 'setupError', code: 'channel_blocked', detail: 'blocked' });
   });
 
   it('maps an SDK failure during starting', () => {

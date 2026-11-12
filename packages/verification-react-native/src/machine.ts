@@ -78,6 +78,7 @@ function terminalForErrorItem(item: ApiErrorItem): VerificationState {
   switch (item.code) {
     case 'denied_missing_callback_url':
     case 'application_paused':
+    case 'channel_blocked':
       return { kind: 'setupError', code: item.code, detail: item.detail };
     case 'denied_by_callback':
     case 'denied_invalid_callback_response':

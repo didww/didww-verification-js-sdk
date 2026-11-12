@@ -10,6 +10,7 @@ This package follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - Recognises the `destination_prefix_rate_limited` error code from `@didww/verification-core` 1.3.0.
   It is not retried.
+- Recognises the `channel_blocked` error code. A start refused with it ends in `setupError`.
 
 ## 1.2.0 — 2026-10
 

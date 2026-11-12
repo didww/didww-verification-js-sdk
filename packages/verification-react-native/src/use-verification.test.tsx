@@ -869,6 +869,20 @@ describe('useVerification: rate-limited submit', () => {
     expect(controllerOf(box).state.kind).toBe('failed');
   });
 
+  it('ends a 422 channel_blocked start in setupError', async () => {
+    const { transport, requests } = fakeTransport([
+      rejected(422, errorBody('channel_blocked', 'delivery method is blocked for this account')),
+    ]);
+    const box: Box = { controller: null };
+
+    render(<Host client={clientFor(transport)} box={box} startOnMount={SMS_START} />);
+    await flush();
+    await flush();
+
+    expect(requests).toHaveLength(1);
+    expect(controllerOf(box).state).toMatchObject({ kind: 'setupError', code: 'channel_blocked' });
+  });
+
   it('leaves a rate-limited start terminal, without a retry', async () => {
     const { transport, requests } = fakeTransport([rateLimited('rate_limit_per_ip')]);
     const box: Box = { controller: null };

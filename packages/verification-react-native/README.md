@@ -155,7 +155,8 @@ the SMS listener.
 `setupError` is the state for a failure that is yours, not the user's: `denied_missing_callback_url`,
 meaning this application started a verification with `public` auth and has no callback URL
 registered, so the API had nobody to ask, or `application_paused`, meaning the application is
-paused on your account. Retrying the same call cannot succeed.
+paused on your account, or `channel_blocked`, meaning the account can't use the requested delivery
+method (contact DIDWW support). Retrying the same call cannot succeed.
 Log it loudly; show the user something neutral.
 
 `captured` is deliberately not auto-submitted. You may want to show the code you filled in, or run a
