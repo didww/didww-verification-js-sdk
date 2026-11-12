@@ -4,7 +4,7 @@ Notable changes to `@didww/verification-node`.
 
 This package follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## 1.3.0 — Unreleased
+## 1.3.0 — 2026-11
 
 ### Added
 
